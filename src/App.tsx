@@ -10,6 +10,7 @@ import Exercises from "./pages/Exercises";
 import Grammar from "./pages/Grammar";
 import Quizzes from "./pages/Quizzes";
 import Progress from "./pages/Progress";
+import Games from "./pages/Games";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,10 +25,10 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/exercises" element={<Exercises />} />
           <Route path="/grammar" element={<Grammar />} />
+          <Route path="/games" element={<Games />} />
           <Route path="/quizzes" element={<Quizzes />} />
           <Route path="/progress" element={<Progress />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="/grammar" element={<GrammarTutor />} />
+          <Route path="/grammar-tutor" element={<GrammarTutor />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
