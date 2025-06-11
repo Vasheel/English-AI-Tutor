@@ -4,24 +4,24 @@ import GrammarCorrector from "@/components/GrammarCorrector";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const Index = () => {
-  const subjects = [
-    {
-      title: "Math Exercises",
-      icon: "📐"
-    },
-    {
-      title: "English Grammar",
-      icon: "✍️"
-    },
-    {
-      title: "Science Quizzes", 
-      icon: "🔬"
-    },
-    {
-      title: "Progress Tracking",
-      icon: "📊"
-    }
-  ];
+const subjects = [
+  {
+    title: "English Grammar",
+    icon: "✍️",
+    color: "bg-edu-blue",
+    progress: 45,
+    route: "/grammar"
+  },
+  {
+    title: "Progress Tracking",
+    icon: "📊",
+    color: "bg-edu-green",
+    progress: 70,
+    route: "/progress"
+  }
+];
+
+;
 
   return (
     <div className="min-h-screen bg-edu-bg">
@@ -40,9 +40,14 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           {subjects.map((subject, index) => (
             <SubjectCard
-              key={index}
-              title={subject.title}
-              icon={subject.icon} color={""} progress={0} route={""}            />
+  key={index}
+  title={subject.title}
+  icon={subject.icon}
+  color={subject.color}
+  progress={subject.progress}
+  route={subject.route}
+/>
+        
           ))}
         </div>
 
