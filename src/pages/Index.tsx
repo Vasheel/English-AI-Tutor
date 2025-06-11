@@ -1,4 +1,3 @@
-
 import NavBar from "@/components/NavBar";
 import SubjectCard from "@/components/SubjectCard";
 import GrammarCorrector from "@/components/GrammarCorrector";
@@ -8,23 +7,19 @@ const Index = () => {
   const subjects = [
     {
       title: "Math Exercises",
-      icon: "📐",
-      href: "/exercises"
+      icon: "📐"
     },
     {
       title: "English Grammar",
-      icon: "✍️",
-      href: "/grammar"
+      icon: "✍️"
     },
     {
       title: "Science Quizzes", 
-      icon: "🔬",
-      href: "/quizzes"
+      icon: "🔬"
     },
     {
       title: "Progress Tracking",
-      icon: "📊", 
-      href: "/progress"
+      icon: "📊"
     }
   ];
 
@@ -48,7 +43,6 @@ const Index = () => {
               key={index}
               title={subject.title}
               icon={subject.icon}
-              href={subject.href}
             />
           ))}
         </div>
