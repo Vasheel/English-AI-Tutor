@@ -8,25 +8,21 @@ const Index = () => {
   const subjects = [
     {
       title: "Math Exercises",
-      description: "Practice arithmetic, algebra, and geometry problems",
       icon: "📐",
       href: "/exercises"
     },
     {
       title: "English Grammar",
-      description: "Improve your writing with AI-powered grammar help",
       icon: "✍️",
-      href: "#grammar"
+      href: "/grammar"
     },
     {
       title: "Science Quizzes", 
-      description: "Test your knowledge with interactive science questions",
       icon: "🔬",
       href: "/quizzes"
     },
     {
       title: "Progress Tracking",
-      description: "See how much you've learned and improved",
       icon: "📊", 
       href: "/progress"
     }
@@ -51,7 +47,6 @@ const Index = () => {
             <SubjectCard
               key={index}
               title={subject.title}
-              description={subject.description}
               icon={subject.icon}
               href={subject.href}
             />
