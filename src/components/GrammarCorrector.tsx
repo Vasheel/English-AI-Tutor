@@ -1,164 +1,89 @@
-
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-
-interface CorrectionResult {
-  originalSentence: string;
-  correctedSentence: string;
-  explanation: string;
-  hasErrors: boolean;
-}
+import { useState } from "react";
 
 const GrammarCorrector = () => {
-  const [sentence, setSentence] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<CorrectionResult | null>(null);
-  const { toast } = useToast();
+  const [input, setInput] = useState("");
+  const [corrected, setCorrected] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const correctGrammar = async () => {
-    if (!sentence.trim()) {
-      toast({
-        title: "Please enter a sentence",
-        description: "Type a sentence that you'd like me to check!",
-        variant: "destructive",
-      });
-      return;
-    }
+    setLoading(true);
+    setCorrected("");
+    setError("");
 
-    setIsLoading(true);
     try {
-      const response = await fetch('/api/correct-grammar', {
-        method: 'POST',
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ sentence: sentence.trim() }),
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "user",
+              content: `Please correct the grammar in the following sentence and explain the correction: "${input}"`,
+            },
+          ],
+          temperature: 0.2,
+        }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to correct grammar');
-      }
 
       const data = await response.json();
-      setResult(data);
-      
-      if (!data.hasErrors) {
-        toast({
-          title: "Great job! 🎉",
-          description: "Your sentence is already correct!",
-        });
+
+      if (data.choices && data.choices[0]?.message?.content) {
+        setCorrected(data.choices[0].message.content);
+      } else {
+        setError("Could not process response.");
+        console.error("OpenAI error:", data);
       }
-    } catch (error) {
-      console.error('Error correcting grammar:', error);
-      toast({
-        title: "Oops! Something went wrong",
-        description: "Please try again in a moment.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.error("Network error:", err);
+      setError("Oops! Something went wrong. Please try again.");
     }
+
+    setLoading(false);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       correctGrammar();
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-2xl">✍️</span>
-            Grammar Helper
-          </CardTitle>
-          <CardDescription>
-            Type a sentence and I'll help you make it perfect! Press Ctrl+Enter to check quickly.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="sentence">Your Sentence</Label>
-            <Textarea
-              id="sentence"
-              placeholder="Write your sentence here... For example: 'Me and my friend goes to school everyday.'"
-              value={sentence}
-              onChange={(e) => setSentence(e.target.value)}
-              onKeyDown={handleKeyPress}
-              className="min-h-[100px] text-base"
-            />
-          </div>
-          
-          <Button 
-            onClick={correctGrammar} 
-            disabled={isLoading || !sentence.trim()}
-            className="w-full"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Checking your grammar...
-              </>
-            ) : (
-              'Check My Grammar'
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="bg-white rounded-xl shadow-md p-6 max-w-4xl mx-auto mt-6">
+      <h3 className="text-lg font-semibold mb-2">📝 Grammar Helper</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Type a sentence and I’ll help you make it perfect! Press Ctrl+Enter to check quickly.
+      </p>
+      <textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="She don't has no pencil..."
+        className="w-full h-32 p-3 border border-gray-300 rounded-lg mb-4 resize-none"
+      />
+      <button
+        onClick={correctGrammar}
+        className="bg-purple-400 text-white px-6 py-2 rounded-lg hover:bg-purple-500 transition"
+        disabled={loading}
+      >
+        {loading ? "Checking..." : "Check My Grammar"}
+      </button>
 
-      {result && (
-        <Card className={result.hasErrors ? "border-orange-200 bg-orange-50" : "border-green-200 bg-green-50"}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {result.hasErrors ? (
-                <>
-                  <XCircle className="h-5 w-5 text-orange-600" />
-                  <span className="text-orange-800">Let's Fix This Together!</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="text-green-800">Perfect Grammar!</span>
-                </>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div>
-                <Label className="text-sm font-medium text-gray-600">What you wrote:</Label>
-                <p className="text-base p-3 bg-white rounded border border-gray-200 mt-1">
-                  {result.originalSentence}
-                </p>
-              </div>
-              
-              {result.hasErrors && (
-                <div>
-                  <Label className="text-sm font-medium text-green-700">Corrected version:</Label>
-                  <p className="text-base p-3 bg-green-100 rounded border border-green-200 mt-1 font-medium">
-                    {result.correctedSentence}
-                  </p>
-                </div>
-              )}
-              
-              <div>
-                <Label className="text-sm font-medium text-blue-700">
-                  {result.hasErrors ? "Why this helps:" : "What makes it great:"}
-                </Label>
-                <p className="text-base p-3 bg-blue-50 rounded border border-blue-200 mt-1">
-                  {result.explanation}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {corrected && (
+        <div className="mt-4 p-4 bg-green-50 border border-green-300 rounded-lg whitespace-pre-wrap">
+          <strong>✅ Suggestion:</strong>
+          <p>{corrected}</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 p-3 bg-red-100 text-red-700 border border-red-300 rounded-lg">
+          {error}
+        </div>
       )}
     </div>
   );
