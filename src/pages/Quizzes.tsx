@@ -29,7 +29,9 @@ const Quizzes = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <QuizGenerator />
+            <QuizGenerator difficulty={"easy"} onProgress={function (score: number): void {
+              throw new Error("Function not implemented.");
+            } } />
           </div>
           
           <div className="space-y-6">

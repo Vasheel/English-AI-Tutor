@@ -11,6 +11,7 @@ import Grammar from "./pages/Grammar";
 import Quizzes from "./pages/Quizzes";
 import Progress from "./pages/Progress";
 import Games from "./pages/Games";
+import ReadingPage from "@/pages/Reading";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/exercises" element={<Exercises />} />
           <Route path="/grammar" element={<Grammar />} />
           <Route path="/games" element={<Games />} />
+          <Route path="/reading" element={<ReadingPage />} />
           <Route path="/quizzes" element={<Quizzes />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/grammar-tutor" element={<GrammarTutor />} />

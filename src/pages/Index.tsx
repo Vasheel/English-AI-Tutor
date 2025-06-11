@@ -23,6 +23,13 @@ const subjects = [
     route: "/games"
   },
   {
+  title: "Reading Comprehension",
+  icon: "📚",
+  color: "bg-edu-orange",
+  progress: 40,
+  route: "/reading"
+  },
+  {
     title: "Progress Tracking",
     icon: "📊",
     color: "bg-edu-green",
