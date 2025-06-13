@@ -1,49 +1,57 @@
-
 import NavBar from "@/components/NavBar";
 import SubjectCard from "@/components/SubjectCard";
 import GrammarCorrector from "@/components/GrammarCorrector";
-import ProgressDashboard from "@/components/ProgressDashboard";
+import SupabaseProgressDashboard from "@/components/SupabaseProgressDashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
 
 const Index = () => {
-const subjects = [
-  {
-    title: "English Grammar",
-    icon: "✍️",
-    color: "bg-edu-blue",
-    progress: 45,
-    route: "/grammar"
-  },
-  {
-    title: "Educational Games",
-    icon: "🎮",
-    color: "bg-edu-purple",
-    progress: 30,
-    route: "/games"
-  },
-  {
-  title: "Reading Comprehension",
-  icon: "📚",
-  color: "bg-edu-orange",
-  progress: 40,
-  route: "/reading"
-  },
-  {
-    title: "Progress Tracking",
-    icon: "📊",
-    color: "bg-edu-green",
-    progress: 70,
-    route: "/progress"
-  },
-  {
-    title: "Practice Quizzes",
-    icon: "📝",
-    color: "bg-edu-yellow",
-    progress: 55,
-    route: "/quizzes"
-  }
-];
+  const { progress } = useSupabaseProgress();
+
+  const getProgressForActivity = (activityType: string) => {
+    const activityProgress = progress.find(p => p.activity_type === activityType);
+    if (!activityProgress || activityProgress.total_attempts === 0) return 0;
+    return Math.round((activityProgress.correct_answers / activityProgress.total_attempts) * 100);
+  };
+
+  const subjects = [
+    {
+      title: "English Grammar",
+      icon: "✍️",
+      color: "bg-edu-blue",
+      progress: getProgressForActivity('grammar'),
+      route: "/grammar"
+    },
+    {
+      title: "Educational Games",
+      icon: "🎮",
+      color: "bg-edu-purple",
+      progress: Math.max(getProgressForActivity('word_scramble'), getProgressForActivity('sentence_builder')),
+      route: "/games"
+    },
+    {
+      title: "Reading Comprehension",
+      icon: "📚",
+      color: "bg-edu-orange",
+      progress: getProgressForActivity('reading'),
+      route: "/reading"
+    },
+    {
+      title: "Progress Tracking",
+      icon: "📊",
+      color: "bg-edu-green",
+      progress: 70,
+      route: "/progress"
+    },
+    {
+      title: "Practice Quizzes",
+      icon: "📝",
+      color: "bg-edu-yellow",
+      progress: getProgressForActivity('quiz'),
+      route: "/quizzes"
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-edu-bg">
@@ -89,7 +97,7 @@ const subjects = [
           </TabsContent>
           
           <TabsContent value="progress">
-            <ProgressDashboard />
+            <SupabaseProgressDashboard />
           </TabsContent>
         </Tabs>
 

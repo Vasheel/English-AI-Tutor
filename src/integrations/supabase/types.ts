@@ -9,7 +9,329 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      activity_sessions: {
+        Row: {
+          activity_type: string
+          created_at: string | null
+          difficulty_level: number | null
+          id: string
+          score: number
+          session_data: Json | null
+          time_spent: number
+          total_questions: number
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string | null
+          difficulty_level?: number | null
+          id?: string
+          score: number
+          session_data?: Json | null
+          time_spent: number
+          total_questions: number
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string | null
+          difficulty_level?: number | null
+          id?: string
+          score?: number
+          session_data?: Json | null
+          time_spent?: number
+          total_questions?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      badges: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          requirement_type: string | null
+          requirement_value: number | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          requirement_type?: string | null
+          requirement_value?: number | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          requirement_type?: string | null
+          requirement_value?: number | null
+        }
+        Relationships: []
+      }
+      comprehension_questions: {
+        Row: {
+          correct_answer: string
+          created_at: string | null
+          explanation: string | null
+          id: string
+          options: Json | null
+          passage_id: string
+          question_text: string
+          question_type: string
+        }
+        Insert: {
+          correct_answer: string
+          created_at?: string | null
+          explanation?: string | null
+          id?: string
+          options?: Json | null
+          passage_id: string
+          question_text: string
+          question_type: string
+        }
+        Update: {
+          correct_answer?: string
+          created_at?: string | null
+          explanation?: string | null
+          id?: string
+          options?: Json | null
+          passage_id?: string
+          question_text?: string
+          question_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comprehension_questions_passage_id_fkey"
+            columns: ["passage_id"]
+            isOneToOne: false
+            referencedRelation: "reading_passages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          grade_level: number | null
+          id: string
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          grade_level?: number | null
+          id: string
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          grade_level?: number | null
+          id?: string
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
+      reading_passages: {
+        Row: {
+          ai_generated: boolean | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          difficulty_level: number | null
+          id: string
+          title: string
+          topic: string | null
+        }
+        Insert: {
+          ai_generated?: boolean | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          difficulty_level?: number | null
+          id?: string
+          title: string
+          topic?: string | null
+        }
+        Update: {
+          ai_generated?: boolean | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          difficulty_level?: number | null
+          id?: string
+          title?: string
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reading_passages_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_badges: {
+        Row: {
+          badge_id: string
+          earned_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_badges_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_progress: {
+        Row: {
+          activity_type: string
+          best_streak: number | null
+          correct_answers: number | null
+          created_at: string | null
+          current_level: number | null
+          current_streak: number | null
+          id: string
+          last_activity: string | null
+          total_attempts: number | null
+          total_time_spent: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          best_streak?: number | null
+          correct_answers?: number | null
+          created_at?: string | null
+          current_level?: number | null
+          current_streak?: number | null
+          id?: string
+          last_activity?: string | null
+          total_attempts?: number | null
+          total_time_spent?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          best_streak?: number | null
+          correct_answers?: number | null
+          created_at?: string | null
+          current_level?: number | null
+          current_streak?: number | null
+          id?: string
+          last_activity?: string | null
+          total_attempts?: number | null
+          total_time_spent?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_reading_progress: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          passage_id: string
+          questions_answered: number | null
+          questions_correct: number | null
+          time_spent: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          passage_id: string
+          questions_answered?: number | null
+          questions_correct?: number | null
+          time_spent?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          passage_id?: string
+          questions_answered?: number | null
+          questions_correct?: number | null
+          time_spent?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_reading_progress_passage_id_fkey"
+            columns: ["passage_id"]
+            isOneToOne: false
+            referencedRelation: "reading_passages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_reading_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
