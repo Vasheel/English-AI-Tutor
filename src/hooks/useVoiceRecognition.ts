@@ -1,6 +1,49 @@
 
 import { useState, useCallback, useRef } from 'react';
 
+// Define the SpeechRecognition interface for TypeScript
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+interface SpeechRecognitionResult {
+  readonly length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionAlternative {
+  readonly transcript: string;
+  readonly confidence: number;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+  start(): void;
+  stop(): void;
+}
+
+interface SpeechRecognitionConstructor {
+  new(): SpeechRecognition;
+}
+
 interface VoiceRecognitionOptions {
   onResult: (transcript: string) => void;
   onError?: (error: string) => void;
@@ -17,14 +60,16 @@ export const useVoiceRecognition = ({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const initializeRecognition = useCallback(() => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    const win = window as any;
+    if (!('webkitSpeechRecognition' in win) && !('SpeechRecognition' in win)) {
       setIsSupported(false);
       return null;
     }
 
     setIsSupported(true);
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
+    const SpeechRecognitionConstructor: SpeechRecognitionConstructor = 
+      win.SpeechRecognition || win.webkitSpeechRecognition;
+    const recognition = new SpeechRecognitionConstructor();
 
     recognition.continuous = false;
     recognition.interimResults = false;
@@ -35,13 +80,13 @@ export const useVoiceRecognition = ({
       setIsListening(true);
     };
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript.trim();
       onResult(transcript);
       setIsListening(false);
     };
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       const errorMessage = `Speech recognition error: ${event.error}`;
       onError?.(errorMessage);
       setIsListening(false);
@@ -81,11 +126,3 @@ export const useVoiceRecognition = ({
     stopListening
   };
 };
-
-// Extend Window interface for TypeScript
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}
