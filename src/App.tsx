@@ -1,4 +1,3 @@
-
 import GrammarTutor from "./pages/GrammarTutor";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -16,6 +15,7 @@ import Games from "./pages/Games";
 import ReadingPage from "@/pages/Reading";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import VoiceControls from "@/components/VoiceControls";
 
 const queryClient = new QueryClient();
 
@@ -26,50 +26,53 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Index />
-              </ProtectedRoute>
-            } />
-            <Route path="/exercises" element={
-              <ProtectedRoute>
-                <Exercises />
-              </ProtectedRoute>
-            } />
-            <Route path="/grammar" element={
-              <ProtectedRoute>
-                <Grammar />
-              </ProtectedRoute>
-            } />
-            <Route path="/games" element={
-              <ProtectedRoute>
-                <Games />
-              </ProtectedRoute>
-            } />
-            <Route path="/reading" element={
-              <ProtectedRoute>
-                <ReadingPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/quizzes" element={
-              <ProtectedRoute>
-                <Quizzes />
-              </ProtectedRoute>
-            } />
-            <Route path="/progress" element={
-              <ProtectedRoute>
-                <Progress />
-              </ProtectedRoute>
-            } />
-            <Route path="/grammar-tutor" element={
-              <ProtectedRoute>
-                <GrammarTutor />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <div className="min-h-screen bg-background">
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Index />
+                </ProtectedRoute>
+              } />
+              <Route path="/exercises" element={
+                <ProtectedRoute>
+                  <Exercises />
+                </ProtectedRoute>
+              } />
+              <Route path="/grammar" element={
+                <ProtectedRoute>
+                  <Grammar />
+                </ProtectedRoute>
+              } />
+              <Route path="/games" element={
+                <ProtectedRoute>
+                  <Games />
+                </ProtectedRoute>
+              } />
+              <Route path="/reading" element={
+                <ProtectedRoute>
+                  <ReadingPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/quizzes" element={
+                <ProtectedRoute>
+                  <Quizzes />
+                </ProtectedRoute>
+              } />
+              <Route path="/progress" element={
+                <ProtectedRoute>
+                  <Progress />
+                </ProtectedRoute>
+              } />
+              <Route path="/grammar-tutor" element={
+                <ProtectedRoute>
+                  <GrammarTutor />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <VoiceControls />
+          </div>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

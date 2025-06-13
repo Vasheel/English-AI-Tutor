@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import TopicStorySelector from "./TopicStorySelector";
 import ClozeTestComponent from "./ClozeTestComponent";
 import { useAIStoryGeneration } from "@/hooks/useAIStoryGeneration";
+import VoiceControls from "@/components/VoiceControls";
 
 interface ReadingModuleProps {
   level: number;
@@ -14,11 +15,16 @@ interface ReadingModuleProps {
 }
 
 type ReadingMode = 'select' | 'predefined' | 'topic-story' | 'comprehension' | 'cloze-test';
-type TopicStory = {
+interface TopicStory {
   title: string;
   content: string;
   topic: string;
   difficulty: number;
+  questions: Array<{
+    question: string;
+    options: string[];
+    correct: string;
+  }>;
 };
 
 type ClozeTest = {
@@ -34,14 +40,13 @@ const ReadingModule = ({ level, onProgress }: ReadingModuleProps) => {
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [comprehensionComplete, setComprehensionComplete] = useState(false);
-  const [generatedStory, setGeneratedStory] = useState<TopicStory | null>(null);
-const [clozeTest, setClozeTest] = useState<ClozeTest | null>(null);
-
+  const [currentStory, setCurrentStory] = useState<TopicStory | null>(null);
+  const [clozeTest, setClozeTest] = useState<ClozeTest | null>(null);
   const [clozeScore, setClozeScore] = useState(0);
   const { toast } = useToast();
   const { generateClozeTest } = useAIStoryGeneration();
 
-  const stories = [
+  const stories = useMemo(() => [
     {
       id: 1,
       title: "The Helpful Dolphin",
@@ -161,9 +166,78 @@ News of the magical garden spread throughout the neighborhood. Many people came 
         }
       ]
     }
-  ];
+  ], []);
 
-  const currentStory = stories.find(story => story.id === selectedStory);
+  const generateAIStory = useCallback(async () => {
+    try {
+      const result = await generateClozeTest(currentStory?.content);
+      setCurrentStory({
+        ...currentStory,
+        content: result.text
+      });
+      setClozeTest(result);
+    } catch (error) {
+      console.error('Error generating story:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate story. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [currentStory, generateClozeTest, setCurrentStory, setClozeTest, toast]);
+
+  useEffect(() => {
+    const handleSpeechInput = (text: string) => {
+      const lowerText = text.toLowerCase();
+      
+      // Handle story selection
+      if (mode === 'select') {
+        if (lowerText.includes('choose') || lowerText.includes('select')) {
+          setMode('topic-story');
+          toast({
+            title: "Reading Mode",
+            description: "Please choose a topic or story to read.",
+          });
+        } else if (lowerText.includes('random story')) {
+          setMode('predefined');
+          setSelectedStory(Math.floor(Math.random() * stories.length));
+          toast({
+            title: "Reading Mode",
+            description: "Starting a random story.",
+          });
+        } else if (lowerText.includes('cloze test')) {
+          setMode('cloze-test');
+          generateAIStory();
+          toast({
+            title: "Reading Mode",
+            description: "Starting cloze test mode.",
+          });
+        }
+      }
+      
+      // Handle topic selection
+      if (mode === 'topic-story') {
+        if (lowerText.includes('animals') || lowerText.includes('nature')) {
+          setSelectedStory(1);
+        } else if (lowerText.includes('space') || lowerText.includes('astronomy')) {
+          setSelectedStory(2);
+        } else if (lowerText.includes('history') || lowerText.includes('past')) {
+          setSelectedStory(3);
+        }
+      }
+    };
+
+    // Listen for speech input events
+    window.addEventListener('speech-input', (event: CustomEvent) => {
+      if (event.detail?.text) {
+        handleSpeechInput(event.detail.text);
+      }
+    });
+
+    return () => {
+      window.removeEventListener('speech-input', () => {});
+    };
+  }, [mode, stories, generateAIStory,toast]);
 
   const handleAnswer = (answer: string) => {
     setSelectedAnswer(answer);
@@ -195,21 +269,13 @@ News of the magical garden spread throughout the neighborhood. Many people came 
     });
   };
 
-  type TopicStory = {
-  title: string;
-  content: string;
-  topic: string;
-  difficulty: number;
-};
-
-
   const handleTopicStoryGenerated = (story: TopicStory) => {
-    setGeneratedStory(story);
+    setCurrentStory(story);
     setMode('topic-story');
   };
 
   const startClozeTest = () => {
-    const storyContent = generatedStory?.content || currentStory?.content;
+    const storyContent = currentStory?.content;
     if (storyContent) {
       const test = generateClozeTest(storyContent);
       setClozeTest(test);
@@ -231,7 +297,7 @@ News of the magical garden spread throughout the neighborhood. Many people came 
     setScore(0);
     setShowResult(false);
     setComprehensionComplete(false);
-    setGeneratedStory(null);
+    setCurrentStory(null);
     setClozeTest(null);
     setClozeScore(0);
   };
@@ -284,6 +350,7 @@ News of the magical garden spread throughout the neighborhood. Many people came 
                 </CardContent>
               </Card>
             </div>
+            <VoiceControls />
           </CardContent>
         </Card>
       </div>
@@ -291,7 +358,7 @@ News of the magical garden spread throughout the neighborhood. Many people came 
   }
 
   // Topic Story Selection
-  if (mode === 'topic-story' && !generatedStory) {
+  if (mode === 'topic-story' && !currentStory) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-2 mb-4">
@@ -329,7 +396,7 @@ News of the magical garden spread throughout the neighborhood. Many people came 
   }
 
   // Generated Story Display
-  if (mode === 'topic-story' && generatedStory) {
+  if (mode === 'topic-story' && currentStory) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-2 mb-4">
@@ -343,17 +410,17 @@ News of the magical garden spread throughout the neighborhood. Many people came 
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-6 w-6 text-purple-500" />
-              {generatedStory.title}
+              {currentStory.title}
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary">Topic: {generatedStory.topic}</Badge>
-              <Badge variant="secondary">Level {generatedStory.difficulty}</Badge>
+              <Badge variant="secondary">Topic: {currentStory.topic}</Badge>
+              <Badge variant="secondary">Level {currentStory.difficulty}</Badge>
             </div>
           </CardHeader>
           <CardContent>
             <div className="prose max-w-none mb-8">
               <div className="text-gray-800 leading-relaxed whitespace-pre-line">
-                {generatedStory.content}
+                {currentStory.content}
               </div>
             </div>
 

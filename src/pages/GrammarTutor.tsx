@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import VoiceControls from "@/components/VoiceControls";
 
 const GrammarTutor: React.FC = () => {
   const [input, setInput] = useState("");
@@ -6,56 +7,78 @@ const GrammarTutor: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-const handleGrammarCheck = async () => {
-  if (!input.trim()) return;
+  const handleGrammarCheck = useCallback(async () => {
+    if (!input.trim()) return;
 
-  setLoading(true);
-  setError("");
-  setOutput("");
+    setLoading(true);
+    setError("");
+    setOutput("");
 
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "You are a grammar tutor for Grade 6 students. Correct their sentence and explain the correction clearly in simple language.",
-          },
-          {
-            role: "user",
-            content: input,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 256,
-      }),
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: "You are a grammar tutor for Grade 6 students. Correct their sentence and explain the correction clearly in simple language.",
+            },
+            {
+              role: "user",
+              content: input,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 256,
+        }),
+      });
+
+      const data = await response.json();
+      console.log("OpenAI response:", data);
+
+      const reply = data?.choices?.[0]?.message?.content ?? null;
+
+      if (!reply) {
+        setError("No response from OpenAI.");
+      } else {
+        setOutput(reply);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Something went wrong with OpenAI.");
+    } finally {
+      setLoading(false);
+    }
+  }, [input, setLoading, setError, setOutput]);
+
+  const grammarCheckRef = useRef<() => Promise<void>>(null);
+
+  useEffect(() => {
+    grammarCheckRef.current = handleGrammarCheck;
+  }, [handleGrammarCheck]);
+
+  useEffect(() => {
+    const handleSpeechInput = (text: string) => {
+      setInput(text);
+      grammarCheckRef.current?.();
+    };
+
+    // Listen for speech input events
+    window.addEventListener('speech-input', (event: CustomEvent) => {
+      if (event.detail?.text) {
+        handleSpeechInput(event.detail.text);
+      }
     });
 
-    const data = await response.json();
-    console.log("OpenAI response:", data);
-
-    const reply = data?.choices?.[0]?.message?.content ?? null;
-
-    if (!reply) {
-      setError("No response from OpenAI.");
-    } else {
-      setOutput(reply);
-    }
-  } catch (err) {
-    console.error(err);
-    setError("Something went wrong with OpenAI.");
-  } finally {
-    setLoading(false);
-  }
-};
-
-
+    return () => {
+      window.removeEventListener('speech-input', () => {});
+    };
+  }, []);
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -85,6 +108,7 @@ const handleGrammarCheck = async () => {
       )}
 
       {error && <p className="text-red-600 mt-4">{error}</p>}
+      <VoiceControls />
     </div>
   );
 };
