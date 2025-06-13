@@ -63,31 +63,34 @@ const GrammarTutor: React.FC = () => {
   }, [handleGrammarCheck]);
 
   useEffect(() => {
-    const handleSpeechInput = (text: string) => {
-      setInput(text);
-      grammarCheckRef.current?.();
+    const handleSpeechInput = (event: CustomEvent) => {
+      const { text, type } = event.detail;
+      if (type === 'grammar') {
+        setInput(text);
+        handleGrammarCheck();
+      }
     };
 
     // Listen for speech input events
-    window.addEventListener('speech-input', (event: CustomEvent) => {
-      if (event.detail?.text) {
-        handleSpeechInput(event.detail.text);
-      }
-    });
+    window.addEventListener('speech-input', handleSpeechInput);
 
     return () => {
-      window.removeEventListener('speech-input', () => {});
+      window.removeEventListener('speech-input', handleSpeechInput);
     };
-  }, []);
+  }, [handleGrammarCheck, setInput]);
 
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Grammar Correction</h1>
 
+      <div className="mb-4">
+        <VoiceControls />
+      </div>
+
       <textarea
         className="w-full border p-3 rounded mb-4"
         rows={4}
-        placeholder="Type your sentence here..."
+        placeholder="Type or speak your sentence here..."
         value={input}
         onChange={(e) => setInput(e.target.value)}
       />
@@ -108,7 +111,6 @@ const GrammarTutor: React.FC = () => {
       )}
 
       {error && <p className="text-red-600 mt-4">{error}</p>}
-      <VoiceControls />
     </div>
   );
 };

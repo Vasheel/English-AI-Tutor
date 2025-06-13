@@ -60,41 +60,6 @@ const VoiceControls = () => {
   const [interactionHistory, setInteractionHistory] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Add command recognition
-  const handleCommand = useCallback((command: string) => {
-    const lowerCommand = command.toLowerCase();
-    
-    // Basic command recognition
-    if (lowerCommand.includes('hello') || lowerCommand.includes('hi')) {
-      speak('Hello! How can I assist you today?');
-    } else if (lowerCommand.includes('time')) {
-      const now = new Date();
-      speak(`The current time is ${now.toLocaleTimeString()}`);
-    } else if (lowerCommand.includes('educational games') || lowerCommand.includes('continue learning')) {
-      speak('Opening the educational games section for you!');
-      navigate('/games');
-    } else if (lowerCommand.includes('reading comprehension') || lowerCommand.includes('reading')) {
-      speak('Opening the reading comprehension section for you!');
-      navigate('/reading');
-    } else if (lowerCommand.includes('exercises') || lowerCommand.includes('practice')) {
-      speak('Opening the exercises section for you!');
-      navigate('/exercises');
-    } else if (lowerCommand.includes('grammar') || lowerCommand.includes('grammar rules')) {
-      speak('Opening the grammar section for you!');
-      navigate('/grammar');
-    } else if (lowerCommand.includes('quizzes') || lowerCommand.includes('test')) {
-      speak('Opening the quizzes section for you!');
-      navigate('/quizzes');
-    } else if (lowerCommand.includes('progress') || lowerCommand.includes('my progress')) {
-      speak('Opening your progress section for you!');
-      navigate('/progress');
-    } else if (lowerCommand.includes('help')) {
-      speak('I can help you with these sections: games, reading comprehension, exercises, grammar, quizzes, and progress tracking. What would you like to do?');
-    } else {
-      speak(`I heard: ${command}. I can help you with: games, reading comprehension, exercises, grammar, quizzes, and progress tracking. What would you like to do?`);
-    }
-  }, [speak, navigate]);
-
   // Handle speech input
   const handleSpeechInput = useCallback((text: string) => {
     console.log('Speech recognized:', text);
@@ -104,32 +69,76 @@ const VoiceControls = () => {
     
     // Process the command
     try {
-      handleCommand(text);
+      const lowerCommand = text.toLowerCase();
+      
+      // Navigation commands
+      if (lowerCommand.includes('hello') || lowerCommand.includes('hi')) {
+        speak('Hello! How can I assist you today?');
+      } else if (lowerCommand.includes('time')) {
+        const now = new Date();
+        speak(`The current time is ${now.toLocaleTimeString()}`);
+      } else if (lowerCommand.includes('educational games') || lowerCommand.includes('continue learning')) {
+        speak('Opening the educational games section for you!');
+        navigate('/games');
+      } else if (lowerCommand.includes('reading comprehension') || lowerCommand.includes('reading')) {
+        speak('Opening the reading comprehension section for you!');
+        navigate('/reading');
+      } else if (lowerCommand.includes('exercises') || lowerCommand.includes('practice')) {
+        speak('Opening the exercises section for you!');
+        navigate('/exercises');
+      } else if (lowerCommand.includes('grammar') || lowerCommand.includes('grammar rules')) {
+        speak('Opening the grammar section for you!');
+        navigate('/grammar');
+      } else if (lowerCommand.includes('quizzes') || lowerCommand.includes('test')) {
+        speak('Opening the quizzes section for you!');
+        navigate('/quizzes');
+      } else if (lowerCommand.includes('progress') || lowerCommand.includes('my progress')) {
+        speak('Opening your progress section for you!');
+        navigate('/progress');
+      } else if (lowerCommand.includes('help')) {
+        speak('I can help you with these sections: games, reading comprehension, exercises, grammar, quizzes, and progress tracking. What would you like to do?');
+      }
+      
+      // If not a navigation command and we're on grammar page, assume it's a sentence to check
+      else if (window.location.pathname === '/grammar') {
+        // Emit custom event for grammar correction
+        const event = new CustomEvent('speech-input', { 
+          detail: { text, type: 'grammar' }
+        });
+        window.dispatchEvent(event);
+        speak(`You said: ${text}`);
+      }
+      
     } catch (err) {
       setError('Sorry, I had trouble processing your request.');
       speak('I apologize, I had trouble processing your request.');
     }
-  }, [handleCommand, speak]);
+  }, [speak, navigate]);
 
   // Initialize speech recognition
   const recognition = useMemo(() => {
     const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
     rec.continuous = false;
-    rec.interimResults = false;
+    rec.interimResults = true;
     rec.lang = 'en-US';
     
     rec.onstart = () => {
       setIsListening(true);
       setError(null);
+      speak('Listening for your command...');
     };
 
     rec.onend = () => {
       setIsListening(false);
+      speak('I heard your command.');
     };
 
     rec.onresult = (event) => {
       const speechResult = event.results[0][0].transcript;
-      handleSpeechInput(speechResult);
+      // Only emit event when final result is available
+      if (event.results[0].isFinal) {
+        handleSpeechInput(speechResult);
+      }
     };
 
     rec.onerror = (event) => {
