@@ -1,7 +1,9 @@
 
 import { useState, useEffect } from "react";
-import { Shuffle, CheckCircle, XCircle, RotateCcw } from "lucide-react";
+import { Shuffle, CheckCircle, XCircle, RotateCcw, Mic, MicOff } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { useSoundEffects } from "@/hooks/useSoundEffects";
+import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 
 const WordScramble = () => {
   const words = [
@@ -23,6 +25,23 @@ const WordScramble = () => {
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
 
+  const { playSound } = useSoundEffects();
+
+  const { isListening, isSupported, startListening, stopListening } = useVoiceRecognition({
+    onResult: (transcript) => {
+      const cleanedTranscript = transcript.toUpperCase().replace(/[^A-Z]/g, '');
+      setUserAnswer(cleanedTranscript);
+      playSound('click');
+    },
+    onError: (error) => {
+      toast({
+        title: "Voice Recognition Error",
+        description: "Could not recognize speech. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
   const scrambleWord = (word: string) => {
     const letters = word.split('');
     for (let i = letters.length - 1; i > 0; i--) {
@@ -38,6 +57,7 @@ const WordScramble = () => {
     setScrambledWord(scrambleWord(randomWord.word));
     setUserAnswer("");
     setShowResult(false);
+    playSound('click');
   };
 
   const checkAnswer = () => {
@@ -48,17 +68,32 @@ const WordScramble = () => {
 
     if (correct) {
       setScore(score + 1);
+      playSound('correct');
       toast({
         title: "Correct! 🎉",
         description: "Great job! You unscrambled the word!",
       });
-      setTimeout(nextWord, 2000);
+      setTimeout(() => {
+        nextWord();
+        if ((score + 1) % 5 === 0) {
+          playSound('levelup');
+        }
+      }, 2000);
     } else {
+      playSound('incorrect');
       toast({
         title: "Try Again!",
         description: "That's not quite right. Keep trying!",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
     }
   };
 
@@ -84,20 +119,40 @@ const WordScramble = () => {
           <p className="text-sm text-gray-600">💡 Hint: {currentWord.hint}</p>
         </div>
 
-        <input
-          type="text"
-          value={userAnswer}
-          onChange={(e) => setUserAnswer(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && checkAnswer()}
-          placeholder="Type the unscrambled word..."
-          className="w-full p-3 border border-gray-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-          disabled={showResult}
-        />
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={userAnswer}
+            onChange={(e) => setUserAnswer(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && checkAnswer()}
+            placeholder="Type the unscrambled word..."
+            className="flex-1 p-3 border border-gray-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+            disabled={showResult}
+          />
+          
+          {isSupported && (
+            <button
+              onClick={handleVoiceToggle}
+              disabled={showResult}
+              className={`px-3 py-2 rounded-lg transition-colors ${
+                isListening 
+                  ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              } disabled:opacity-50`}
+              title={isListening ? "Stop listening" : "Click to speak your answer"}
+            >
+              {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4">
         <button
-          onClick={checkAnswer}
+          onClick={() => {
+            playSound('click');
+            checkAnswer();
+          }}
           disabled={!userAnswer.trim() || showResult}
           className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
@@ -106,7 +161,10 @@ const WordScramble = () => {
         </button>
         
         <button
-          onClick={() => setScrambledWord(scrambleWord(currentWord.word))}
+          onClick={() => {
+            playSound('click');
+            setScrambledWord(scrambleWord(currentWord.word));
+          }}
           className="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 flex items-center justify-center"
           title="Scramble again"
         >
@@ -138,6 +196,15 @@ const WordScramble = () => {
           <RotateCcw className="h-4 w-4" />
           Skip Word
         </button>
+      )}
+
+      {isListening && (
+        <div className="mt-4 text-center">
+          <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            Listening... Speak your answer clearly
+          </div>
+        </div>
       )}
     </div>
   );
