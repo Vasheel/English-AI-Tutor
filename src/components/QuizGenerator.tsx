@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, CheckCircle, Clock, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
 
 interface QuizModuleProps {
   difficulty: "easy" | "medium" | "hard";
@@ -104,25 +105,47 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
 
   const questions = quizzes[difficulty];
 
-  useEffect(() => {
-    if (timeLeft > 0 && !showResult && !quizCompleted) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !showResult) {
-      handleTimeUp();
-    }
-  }, [timeLeft, showResult, quizCompleted]);
+   const nextQuestion = useCallback(() => {
+  setCurrentQuestion((prev) => prev + 1);
+  setSelectedAnswer(null);
+  setShowResult(false);
+  setTimeLeft(30);
+}, []);
 
-  const handleTimeUp = () => {
-    setShowResult(true);
-    setTimeout(() => {
-      if (currentQuestion < questions.length - 1) {
-        nextQuestion();
-      } else {
-        completeQuiz();
-      }
-    }, 2000);
-  };
+const completeQuiz = useCallback(() => {
+  setQuizCompleted(true);
+  const finalScore = Math.round((score / questions.length) * 100);
+  onProgress(finalScore);
+
+  toast({
+    title: "Quiz completed!",
+    description: `You scored ${score}/${questions.length} (${finalScore}%)`,
+  });
+}, [score, questions.length, onProgress, toast]);
+
+const handleTimeUp = useCallback(() => {
+  setShowResult(true);
+  setTimeout(() => {
+    if (currentQuestion < questions.length - 1) {
+      nextQuestion();
+    } else {
+      completeQuiz();
+    }
+  }, 2000);
+}, [currentQuestion, questions.length, nextQuestion, completeQuiz]);
+
+  useEffect(() => {
+  if (timeLeft > 0 && !showResult && !quizCompleted) {
+    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    return () => clearTimeout(timer);
+  } else if (timeLeft === 0 && !showResult) {
+    handleTimeUp();
+  }
+}, [timeLeft, showResult, quizCompleted, handleTimeUp]);
+
+
+
+
 
   const handleAnswer = (answer: string) => {
     setSelectedAnswer(answer);
@@ -141,23 +164,11 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
     }, 2000);
   };
 
-  const nextQuestion = () => {
-    setCurrentQuestion(currentQuestion + 1);
-    setSelectedAnswer(null);
-    setShowResult(false);
-    setTimeLeft(30);
-  };
 
-  const completeQuiz = () => {
-    setQuizCompleted(true);
-    const finalScore = Math.round((score / questions.length) * 100);
-    onProgress(finalScore);
-    
-    toast({
-      title: "Quiz completed!",
-      description: `You scored ${score}/${questions.length} (${finalScore}%)`,
-    });
-  };
+
+
+  
+
 
   const restartQuiz = () => {
     setCurrentQuestion(0);

@@ -32,10 +32,11 @@ interface SpeechRecognition extends EventTarget {
   interimResults: boolean;
   lang: string;
   maxAlternatives: number;
-  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
-  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
+onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+
   start(): void;
   stop(): void;
 }
@@ -60,7 +61,11 @@ export const useVoiceRecognition = ({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const initializeRecognition = useCallback(() => {
-    const win = window as any;
+    const win = window as Window & typeof globalThis & {
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  SpeechRecognition?: SpeechRecognitionConstructor;
+};
+
     if (!('webkitSpeechRecognition' in win) && !('SpeechRecognition' in win)) {
       setIsSupported(false);
       return null;

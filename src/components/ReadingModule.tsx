@@ -14,6 +14,17 @@ interface ReadingModuleProps {
 }
 
 type ReadingMode = 'select' | 'predefined' | 'topic-story' | 'comprehension' | 'cloze-test';
+type TopicStory = {
+  title: string;
+  content: string;
+  topic: string;
+  difficulty: number;
+};
+
+type ClozeTest = {
+  text: string;
+  answers: string[];
+};
 
 const ReadingModule = ({ level, onProgress }: ReadingModuleProps) => {
   const [mode, setMode] = useState<ReadingMode>('select');
@@ -23,8 +34,9 @@ const ReadingModule = ({ level, onProgress }: ReadingModuleProps) => {
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [comprehensionComplete, setComprehensionComplete] = useState(false);
-  const [generatedStory, setGeneratedStory] = useState<any>(null);
-  const [clozeTest, setClozeTest] = useState<any>(null);
+  const [generatedStory, setGeneratedStory] = useState<TopicStory | null>(null);
+const [clozeTest, setClozeTest] = useState<ClozeTest | null>(null);
+
   const [clozeScore, setClozeScore] = useState(0);
   const { toast } = useToast();
   const { generateClozeTest } = useAIStoryGeneration();
@@ -183,7 +195,15 @@ News of the magical garden spread throughout the neighborhood. Many people came 
     });
   };
 
-  const handleTopicStoryGenerated = (story: any) => {
+  type TopicStory = {
+  title: string;
+  content: string;
+  topic: string;
+  difficulty: number;
+};
+
+
+  const handleTopicStoryGenerated = (story: TopicStory) => {
     setGeneratedStory(story);
     setMode('topic-story');
   };
