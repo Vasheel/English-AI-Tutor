@@ -1,24 +1,33 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Star, CheckCircle } from "lucide-react";
+import { BookOpen, Star, CheckCircle, ArrowLeft, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import TopicStorySelector from "./TopicStorySelector";
+import ClozeTestComponent from "./ClozeTestComponent";
+import { useAIStoryGeneration } from "@/hooks/useAIStoryGeneration";
 
 interface ReadingModuleProps {
   level: number;
   onProgress: (points: number) => void;
 }
 
+type ReadingMode = 'select' | 'predefined' | 'topic-story' | 'comprehension' | 'cloze-test';
+
 const ReadingModule = ({ level, onProgress }: ReadingModuleProps) => {
+  const [mode, setMode] = useState<ReadingMode>('select');
   const [selectedStory, setSelectedStory] = useState<number | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [comprehensionComplete, setComprehensionComplete] = useState(false);
+  const [generatedStory, setGeneratedStory] = useState<any>(null);
+  const [clozeTest, setClozeTest] = useState<any>(null);
+  const [clozeScore, setClozeScore] = useState(0);
   const { toast } = useToast();
+  const { generateClozeTest } = useAIStoryGeneration();
 
   const stories = [
     {
@@ -174,179 +183,357 @@ News of the magical garden spread throughout the neighborhood. Many people came 
     });
   };
 
-  const resetReading = () => {
+  const handleTopicStoryGenerated = (story: any) => {
+    setGeneratedStory(story);
+    setMode('topic-story');
+  };
+
+  const startClozeTest = () => {
+    const storyContent = generatedStory?.content || currentStory?.content;
+    if (storyContent) {
+      const test = generateClozeTest(storyContent);
+      setClozeTest(test);
+      setMode('cloze-test');
+    }
+  };
+
+  const handleClozeComplete = (score: number) => {
+    setClozeScore(score);
+    const points = score * 3; // 3 points per correct cloze answer
+    onProgress(points);
+  };
+
+  const resetToModeSelect = () => {
+    setMode('select');
     setSelectedStory(null);
     setCurrentQuestion(0);
     setSelectedAnswer(null);
     setScore(0);
     setShowResult(false);
     setComprehensionComplete(false);
+    setGeneratedStory(null);
+    setClozeTest(null);
+    setClozeScore(0);
   };
 
-  if (comprehensionComplete && currentStory) {
+  // Mode Selection Screen
+  if (mode === 'select') {
     return (
-      <div className="max-w-4xl mx-auto">
-        <Card className="text-center">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-center gap-2">
-              <Star className="h-6 w-6 text-yellow-500" />
-              Reading Adventure Complete!
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-6 w-6 text-blue-500" />
+              Reading Adventures
             </CardTitle>
+            <p className="text-gray-600">
+              Choose how you'd like to practice reading today!
+            </p>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="text-6xl">📚</div>
-            <div>
-              <div className="text-3xl font-bold text-blue-600">
-                {score}/{currentStory.questions.length}
-              </div>
-              <div className="text-lg text-gray-600">
-                Comprehension Score
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              {score === currentStory.questions.length && (
-                <Badge className="bg-yellow-500 text-white text-lg px-4 py-2">
-                  Perfect Understanding! 🌟
-                </Badge>
-              )}
-              {score >= currentStory.questions.length * 0.75 && score < currentStory.questions.length && (
-                <Badge className="bg-green-500 text-white text-lg px-4 py-2">
-                  Great Reading! 📖
-                </Badge>
-              )}
-            </div>
+          <CardContent className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card 
+                className="cursor-pointer hover:scale-105 transition-transform border-2 hover:border-purple-300"
+                onClick={() => setMode('topic-story')}
+              >
+                <CardContent className="p-6 text-center">
+                  <Sparkles className="h-12 w-12 text-purple-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold mb-2">AI Story Generator</h3>
+                  <p className="text-gray-600 mb-4">
+                    Choose a topic and get a personalized story with comprehension questions and cloze tests!
+                  </p>
+                  <Badge className="bg-purple-500 text-white">
+                    ✨ New Feature!
+                  </Badge>
+                </CardContent>
+              </Card>
 
-            <Button onClick={resetReading} className="w-full">
-              Read Another Story
-            </Button>
+              <Card 
+                className="cursor-pointer hover:scale-105 transition-transform border-2 hover:border-blue-300"
+                onClick={() => setMode('predefined')}
+              >
+                <CardContent className="p-6 text-center">
+                  <BookOpen className="h-12 w-12 text-blue-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold mb-2">Classic Stories</h3>
+                  <p className="text-gray-600 mb-4">
+                    Read carefully crafted stories with comprehension questions.
+                  </p>
+                  <Badge variant="secondary">
+                    {stories.filter(story => story.level <= level + 1).length} Stories
+                  </Badge>
+                </CardContent>
+              </Card>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (selectedStory && currentStory) {
+  // Topic Story Selection
+  if (mode === 'topic-story' && !generatedStory) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Button variant="outline" onClick={resetToModeSelect}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+        </div>
+        <TopicStorySelector 
+          onStoryGenerated={handleTopicStoryGenerated}
+          difficulty={level}
+        />
+      </div>
+    );
+  }
+
+  // Cloze Test Mode
+  if (mode === 'cloze-test' && clozeTest) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Button variant="outline" onClick={() => setMode('topic-story')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Story
+          </Button>
+        </div>
+        <ClozeTestComponent
+          text={clozeTest.text}
+          answers={clozeTest.answers}
+          onComplete={handleClozeComplete}
+          onRestart={() => setMode('topic-story')}
+        />
+      </div>
+    );
+  }
+
+  // Generated Story Display
+  if (mode === 'topic-story' && generatedStory) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Button variant="outline" onClick={resetToModeSelect}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Menu
+          </Button>
+        </div>
+        
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="h-6 w-6 text-blue-500" />
-                {currentStory.title}
-              </CardTitle>
-              <Button variant="outline" onClick={resetReading}>
-                Choose Different Story
-              </Button>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-6 w-6 text-purple-500" />
+              {generatedStory.title}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">Topic: {generatedStory.topic}</Badge>
+              <Badge variant="secondary">Level {generatedStory.difficulty}</Badge>
             </div>
           </CardHeader>
           <CardContent>
             <div className="prose max-w-none mb-8">
               <div className="text-gray-800 leading-relaxed whitespace-pre-line">
-                {currentStory.content}
+                {generatedStory.content}
               </div>
             </div>
 
-            <Card className="bg-blue-50">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Comprehension Questions ({currentQuestion + 1}/{currentStory.questions.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <h4 className="text-lg font-semibold mb-4">
-                  {currentStory.questions[currentQuestion].question}
-                </h4>
-                
-                <div className="space-y-3">
-                  {currentStory.questions[currentQuestion].options.map((option, index) => (
-                    <Button
-                      key={index}
-                      variant={
-                        showResult
-                          ? option === currentStory.questions[currentQuestion].correct
-                            ? "default"
-                            : selectedAnswer === option
-                            ? "destructive"
-                            : "outline"
-                          : "outline"
-                      }
-                      className="w-full text-left justify-start p-4 h-auto"
-                      onClick={() => !showResult && handleAnswer(option)}
-                      disabled={showResult}
-                    >
-                      <span className="mr-3 font-bold">
-                        {String.fromCharCode(65 + index)}.
-                      </span>
-                      {option}
-                      {showResult && option === currentStory.questions[currentQuestion].correct && (
-                        <CheckCircle className="h-4 w-4 ml-auto text-green-600" />
-                      )}
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="mt-4 text-sm text-gray-600">
-                  Score: {score}/{currentQuestion + (showResult ? 1 : 0)}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex gap-4">
+              <Button onClick={startClozeTest} className="flex-1">
+                📝 Try Fill-in-the-Blanks
+              </Button>
+              <Button onClick={resetToModeSelect} variant="outline" className="flex-1">
+                🔄 Generate New Story
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-blue-500" />
-            Reading Adventures
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-600 mb-6">
-            Choose a story to read and answer comprehension questions. Stories are selected based on your reading level.
-          </p>
+  // Predefined Stories Mode
+  if (mode === 'predefined') {
+    if (comprehensionComplete && currentStory) {
+      return (
+        <div className="max-w-4xl mx-auto">
+          <Card className="text-center">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-center gap-2">
+                <Star className="h-6 w-6 text-yellow-500" />
+                Reading Adventure Complete!
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="text-6xl">📚</div>
+              <div>
+                <div className="text-3xl font-bold text-blue-600">
+                  {score}/{currentStory.questions.length}
+                </div>
+                <div className="text-lg text-gray-600">
+                  Comprehension Score
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {score === currentStory.questions.length && (
+                  <Badge className="bg-yellow-500 text-white text-lg px-4 py-2">
+                    Perfect Understanding! 🌟
+                  </Badge>
+                )}
+                {score >= currentStory.questions.length * 0.75 && score < currentStory.questions.length && (
+                  <Badge className="bg-green-500 text-white text-lg px-4 py-2">
+                    Great Reading! 📖
+                  </Badge>
+                )}
+              </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {stories.filter(story => story.level <= level + 1).map((story) => (
-              <Card 
-                key={story.id}
-                className="hover:scale-105 transition-transform cursor-pointer border-2 hover:border-blue-300"
-                onClick={() => setSelectedStory(story.id)}
-              >
+              <div className="flex gap-4">
+                <Button onClick={startClozeTest} className="flex-1">
+                  📝 Try Cloze Test
+                </Button>
+                <Button onClick={resetToModeSelect} variant="outline" className="flex-1">
+                  Choose Different Story
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    if (selectedStory && currentStory) {
+      return (
+        <div className="max-w-4xl mx-auto space-y-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Button variant="outline" onClick={() => setMode('predefined')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          </div>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-6 w-6 text-blue-500" />
+                {currentStory.title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="prose max-w-none mb-8">
+                <div className="text-gray-800 leading-relaxed whitespace-pre-line">
+                  {currentStory.content}
+                </div>
+              </div>
+
+              <Card className="bg-blue-50">
                 <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">{story.title}</CardTitle>
-                    <Badge variant={story.level <= level ? "default" : "secondary"}>
-                      Level {story.level}
-                    </Badge>
-                  </div>
+                  <CardTitle className="text-lg">
+                    Comprehension Questions ({currentQuestion + 1}/{currentStory.questions.length})
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-600 text-sm mb-4">
-                    {story.content.substring(0, 100)}...
-                  </p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500">
-                      {story.questions.length} questions
-                    </span>
-                    <Button size="sm">
-                      Start Reading
-                    </Button>
+                  <h4 className="text-lg font-semibold mb-4">
+                    {currentStory.questions[currentQuestion].question}
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    {currentStory.questions[currentQuestion].options.map((option, index) => (
+                      <Button
+                        key={index}
+                        variant={
+                          showResult
+                            ? option === currentStory.questions[currentQuestion].correct
+                              ? "default"
+                              : selectedAnswer === option
+                              ? "destructive"
+                              : "outline"
+                            : "outline"
+                        }
+                        className="w-full text-left justify-start p-4 h-auto"
+                        onClick={() => !showResult && handleAnswer(option)}
+                        disabled={showResult}
+                      >
+                        <span className="mr-3 font-bold">
+                          {String.fromCharCode(65 + index)}.
+                        </span>
+                        {option}
+                        {showResult && option === currentStory.questions[currentQuestion].correct && (
+                          <CheckCircle className="h-4 w-4 ml-auto text-green-600" />
+                        )}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 text-sm text-gray-600">
+                    Score: {score}/{currentQuestion + (showResult ? 1 : 0)}
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Button variant="outline" onClick={resetToModeSelect}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Menu
+          </Button>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-6 w-6 text-blue-500" />
+              Classic Reading Stories
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-6">
+              Choose a story to read and answer comprehension questions. Stories are selected based on your reading level.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {stories.filter(story => story.level <= level + 1).map((story) => (
+                <Card 
+                  key={story.id}
+                  className="hover:scale-105 transition-transform cursor-pointer border-2 hover:border-blue-300"
+                  onClick={() => setSelectedStory(story.id)}
+                >
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-lg">{story.title}</CardTitle>
+                      <Badge variant={story.level <= level ? "default" : "secondary"}>
+                        Level {story.level}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 text-sm mb-4">
+                      {story.content.substring(0, 100)}...
+                    </p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">
+                        {story.questions.length} questions
+                      </span>
+                      <Button size="sm">
+                        Start Reading
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return null;
 };
 
 export default ReadingModule;
