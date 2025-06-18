@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Loader, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 
 const GrammarCorrector = () => {
   const [input, setInput] = useState("");
@@ -15,6 +16,14 @@ const GrammarCorrector = () => {
     start: number;
     end: number;
   }>>([]);
+
+  const { startListening, isListening } = useVoiceRecognition({
+  onResult: (spokenText) => {
+    setInput(spokenText);        // set textarea
+    handleCheck(spokenText);     // trigger grammar check
+  },
+  onError: (e) => console.error("Speech Error:", e),
+});
 
   const correctGrammar = async (retryCount = 0) => {
     if (!input.trim()) {
@@ -144,14 +153,28 @@ const GrammarCorrector = () => {
       <p className="text-sm text-gray-500 mb-4">
         Type a sentence and I'll help you make it perfect! Press Ctrl+Enter to check quickly.
       </p>
+
+      <div className="flex items-start gap-2 mb-4">
+  <textarea
+    value={input}
+    onChange={(e) => setInput(e.target.value)}
+    onKeyDown={handleKeyDown}
+    placeholder="She don't has no pencil..."
+    className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+  />
+  <button
+    onClick={startListening}
+    title="Speak your sentence"
+    className={`p-3 rounded-lg text-white ${
+      isListening ? "bg-red-600" : "bg-blue-500 hover:bg-blue-600"
+    }`}
+  >
+    🎤
+  </button>
+</div>
+
       
-      <textarea
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="She don't has no pencil..."
-        className="w-full h-32 p-3 border border-gray-300 rounded-lg mb-4 resize-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-      />
+   
       
       <button
         onClick={() => correctGrammar()}
@@ -225,3 +248,7 @@ const GrammarCorrector = () => {
 };
 
 export default GrammarCorrector;
+function handleCheck(spokenText: string) {
+  throw new Error("Function not implemented.");
+}
+

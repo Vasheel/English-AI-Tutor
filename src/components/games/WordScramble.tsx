@@ -1,38 +1,45 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Shuffle, CheckCircle, XCircle, RotateCcw, Mic, MicOff } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { psacVocabulary, generateGrammarQuestion } from '../psacVocabulary.ts';
+
+type QuizType = {
+  question: string;
+  options: string[];
+  answer: string;
+};
 
 const WordScramble = () => {
-  const words = [
-    { word: "FRIEND", hint: "Someone you like to play with" },
-    { word: "SCHOOL", hint: "Where you go to learn" },
-    { word: "FAMILY", hint: "People who live with you" },
-    { word: "ANIMAL", hint: "Dogs, cats, and birds are these" },
-    { word: "GARDEN", hint: "Where flowers and plants grow" },
-    { word: "KITCHEN", hint: "Room where you cook food" },
-    { word: "BICYCLE", hint: "Two-wheeled vehicle you pedal" },
-    { word: "RAINBOW", hint: "Colorful arc in the sky after rain" }
-  ];
 
-  const [currentWord, setCurrentWord] = useState(words[0]);
-  const [scrambledWord, setScrambledWord] = useState("");
-  const [userAnswer, setUserAnswer] = useState("");
-  const [score, setScore] = useState(0);
-  const [attempts, setAttempts] = useState(0);
-  const [showResult, setShowResult] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
+const [currentQuiz, setCurrentQuiz] = useState<QuizType | null>(null);
+const [currentWord, setCurrentWord] = useState(null); 
+const [scrambledWord, setScrambledWord] = useState("");
+const [userAnswer, setUserAnswer] = useState("");
+const [score, setScore] = useState(0);
+const [attempts, setAttempts] = useState(0);
+const [showResult, setShowResult] = useState(false);
+const [isCorrect, setIsCorrect] = useState(false);
+
 
   const { playSound } = useSoundEffects();
+ 
 
   const { isListening, isSupported, startListening, stopListening } = useVoiceRecognition({
     onResult: (transcript) => {
-      const cleanedTranscript = transcript.toUpperCase().replace(/[^A-Z]/g, '');
-      setUserAnswer(cleanedTranscript);
-      playSound('click');
-    },
+  const cleanedTranscript = transcript.toUpperCase().replace(/[^A-Z]/g, '');
+  setUserAnswer(cleanedTranscript);
+  playSound('click');
+
+  checkAnswer(cleanedTranscript, true); //  pass voice flag
+  setTimeout(() => {
+    nextWord(); //  manually trigger next word after delay
+  }, 2000);
+
+},
+      
     onError: (error) => {
       toast({
         title: "Voice Recognition Error",
@@ -41,6 +48,9 @@ const WordScramble = () => {
       });
     }
   });
+
+  console.log("Voice recognition supported?", isSupported);
+
 
   const scrambleWord = (word: string) => {
     const letters = word.split('');
@@ -51,44 +61,57 @@ const WordScramble = () => {
     return letters.join('');
   };
 
-  const nextWord = () => {
-    const randomWord = words[Math.floor(Math.random() * words.length)];
-    setCurrentWord(randomWord);
-    setScrambledWord(scrambleWord(randomWord.word));
-    setUserAnswer("");
-    setShowResult(false);
-    playSound('click');
-  };
+const nextWord = useCallback(() => {
+  const rawWord = psacVocabulary[Math.floor(Math.random() * psacVocabulary.length)];
+  const cleanedWord = rawWord.word.trim().toUpperCase();
 
-  const checkAnswer = () => {
-    const correct = userAnswer.toUpperCase() === currentWord.word;
+  setCurrentWord({ ...rawWord, word: cleanedWord });
+  setScrambledWord(scrambleWord(cleanedWord));
+  setUserAnswer("");
+  setShowResult(false);
+  setIsCorrect(false);
+  setCurrentQuiz(generateGrammarQuestion(rawWord));
+  playSound("click");
+}, [playSound]);
+
+
+  const checkAnswer = (input: string = userAnswer, isFromVoice: boolean = false) => {
+
+    const cleanedInput = input.trim().toUpperCase();
+    const correctWord = currentWord.word.trim().toUpperCase();
+    
+    console.log("🔍 Comparing:", `"${cleanedInput}"`, "vs", `"${correctWord}"`);
+
+    const correct = cleanedInput === correctWord;
     setIsCorrect(correct);
     setShowResult(true);
-    setAttempts(attempts + 1);
+    setAttempts((prev) => prev + 1);
 
     if (correct) {
-      setScore(score + 1);
+      setScore((prev) => prev + 1);
       playSound('correct');
       toast({
         title: "Correct! 🎉",
         description: "Great job! You unscrambled the word!",
       });
+
+if (!isFromVoice) {
       setTimeout(() => {
         nextWord();
-        if ((score + 1) % 5 === 0) {
-          playSound('levelup');
-        }
+        if ((score + 1) % 5 === 0) playSound("levelup");
       }, 2000);
-    } else {
-      playSound('incorrect');
-      toast({
-        title: "Try Again!",
-        description: "That's not quite right. Keep trying!",
-        variant: "destructive"
-      });
     }
-  };
+  } else {
+    playSound("incorrect");
+    toast({
+      title: "Try Again!",
+      description: "That's not quite right. Keep trying!",
+      variant: "destructive",
+    });
+  }
+};
 
+  
   const handleVoiceToggle = () => {
     if (isListening) {
       stopListening();
@@ -97,9 +120,12 @@ const WordScramble = () => {
     }
   };
 
-  useEffect(() => {
-    nextWord();
-  }, []);
+
+useEffect(() => {
+  nextWord();
+}, [nextWord]);
+
+
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6 max-w-md mx-auto">
@@ -116,36 +142,55 @@ const WordScramble = () => {
           <p className="text-2xl font-bold text-purple-800 tracking-widest mb-2">
             {scrambledWord}
           </p>
-          <p className="text-sm text-gray-600">💡 Hint: {currentWord.hint}</p>
+          <p className="text-sm text-gray-600">
+  💡 Hint: {currentWord ? currentWord.hint : "Loading..."}
+</p>
+
         </div>
 
-        <div className="flex gap-2 mb-4">
-          <input
-            type="text"
-            value={userAnswer}
-            onChange={(e) => setUserAnswer(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && checkAnswer()}
-            placeholder="Type the unscrambled word..."
-            className="flex-1 p-3 border border-gray-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-            disabled={showResult}
-          />
-          
-          {isSupported && (
-            <button
-              onClick={handleVoiceToggle}
-              disabled={showResult}
-              className={`px-3 py-2 rounded-lg transition-colors ${
-                isListening 
-                  ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              } disabled:opacity-50`}
-              title={isListening ? "Stop listening" : "Click to speak your answer"}
-            >
-              {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-            </button>
-          )}
-        </div>
+       <div className="flex items-center gap-2 mb-4">
+  <input
+    type="text"
+    value={userAnswer}
+    onChange={(e) => setUserAnswer(e.target.value.trim().toUpperCase())}
+    onKeyDown={(e) => e.key === 'Enter' && checkAnswer()}
+    placeholder="Type or speak the answer..."
+    className="flex-1 p-3 border border-gray-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+    disabled={showResult}
+  />
+
+  {isSupported && (
+    <button
+      onClick={startListening}
+      disabled={showResult}
+      className={`p-3 rounded-lg text-white ${
+        isListening
+          ? "bg-red-600 animate-pulse"
+          : "bg-blue-500 hover:bg-blue-600"
+      }`}
+      title={isListening ? "Stop Listening" : "Click to speak your answer"}
+    >
+      🎤
+    </button>
+  )}
+</div>
+
       </div>
+      
+      {currentQuiz ? (
+  <div className="bg-yellow-100 p-3 rounded mb-4">
+    <div className="font-semibold mb-2">🧠 Grammar Check:</div>
+    <div className="mb-2">{currentQuiz.question || "No question available."}</div>
+    <ul className="list-disc list-inside">
+      {(currentQuiz.options || []).map((opt, idx) => (
+        <li key={idx}>{opt}</li>
+      ))}
+    </ul>
+  </div>
+) : (
+  <div className="text-sm text-gray-500 italic mb-4">Loading quiz...</div>
+)}
+
 
       <div className="flex gap-2 mb-4">
         <button
@@ -211,3 +256,5 @@ const WordScramble = () => {
 };
 
 export default WordScramble;
+
+

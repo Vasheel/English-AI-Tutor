@@ -33,9 +33,9 @@ interface SpeechRecognition extends EventTarget {
   lang: string;
   maxAlternatives: number;
   onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
-onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
-onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
-onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
 
   start(): void;
   stop(): void;
@@ -56,25 +56,20 @@ export const useVoiceRecognition = ({
   onError,
   language = 'en-US'
 }: VoiceRecognitionOptions) => {
+  // ① detect API once, synchronously
+  const SpeechRecognitionAPI =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+  const initialSupported = Boolean(SpeechRecognitionAPI);
+
   const [isListening, setIsListening] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+  const [isSupported, setIsSupported] = useState(initialSupported);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const initializeRecognition = useCallback(() => {
-    const win = window as Window & typeof globalThis & {
-  webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  SpeechRecognition?: SpeechRecognitionConstructor;
-};
+      if (!SpeechRecognitionAPI) return null;
+    const recognition = new SpeechRecognitionAPI();
 
-    if (!('webkitSpeechRecognition' in win) && !('SpeechRecognition' in win)) {
-      setIsSupported(false);
-      return null;
-    }
-
-    setIsSupported(true);
-    const SpeechRecognitionConstructor: SpeechRecognitionConstructor = 
-      win.SpeechRecognition || win.webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionConstructor();
 
     recognition.continuous = false;
     recognition.interimResults = false;
@@ -102,7 +97,7 @@ export const useVoiceRecognition = ({
     };
 
     return recognition;
-  }, [language, onResult, onError]);
+  }, [SpeechRecognitionAPI, language, onResult, onError]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current) {
