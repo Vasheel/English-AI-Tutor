@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import fuzzysort from 'fuzzysort';
 import { Loader2 } from "lucide-react";
@@ -67,6 +67,7 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
   const [error, setError] = useState<string | null>(null);
   const [suggestedCommands, setSuggestedCommands] = useState<string[]>([]);
   const [recentCommands, setRecentCommands] = useState<string[]>([]);
+  const recognitionRef = useRef<SpeechRecognition|null>(null);
 
   const synth = window.speechSynthesis;
 
@@ -95,12 +96,13 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
     
     if (result.confidence < -2000) { // Adjust threshold as needed
       setError("I didn't understand that. Please try again.");
-      speak("I didn't understand that. Please try again.");
+      speak("Hmm, I’m not quite sure what you meant — could you repeat that?");
       return;
     }
+    setError(null);
 
-    console.log('Speech recognized:', text);
-    speak(`I heard: ${text}`);
+    speak(`Understood.`);
+
     
     // Add to recent commands
     setRecentCommands(prev => [...prev, result.intent || 'unknown']);
@@ -149,17 +151,89 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
       }
 
       // Reset speech recognition after command is processed
-      setIsListening(false);
-      setTimeout(() => {
-        setIsListening(true);
-      }, 1000); // Small delay to prevent immediate reactivation
+      const rec = recognitionRef.current;
+      if (rec) {
+         rec.stop();                     // ⏹️ end current session
+         setTranscript("");              // clear UI
+         setTimeout(() => rec.start(), 300); // ▶️ fresh session
+      }
+
     } catch (error) {
       console.error('Error processing speech input:', error);
       setError('Error processing your command');
     }
-  }, [speak, navigate]);
+ }, [navigate, speak]);
 
-  // Initialize speech recognition
+
+    // Suggested commands carousel
+  useEffect(() => {
+    const suggested = commands.map(cmd => cmd.keywords[0]);
+    setSuggestedCommands(suggested);
+  }, []);
+
+
+  useEffect(() => {
+  // bail out if browser doesn’t support it
+  if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+    setError('Speech API not supported');
+    return;
+  }
+
+  // grab the constructor
+  const API = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!API) {
+  setError("Speech API not supported");
+  return;
+  }
+  // API is now correctly typed as `SpeechRecognitionConstructor`
+  const rec: SpeechRecognition = new API();
+  recognitionRef.current = rec;
+
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = 'en-US';
+
+  rec.onresult = (event) => {
+    const full = Array.from(event.results)
+      .map(r => r[0].transcript)
+      .join('');
+    // final?
+    if (event.results[event.results.length - 1].isFinal) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      isGrammarSection
+        ? onSpeechInput(full)
+        : handleSpeechInput(full);
+    } else {
+      setTranscript(full);
+    }
+  };
+
+  rec.onerror = (ev: SpeechRecognitionErrorEvent) => {
+    console.error('SR error:', ev.error);
+    setError(ev.error);
+  };
+
+  rec.onend = () => {
+    // clear UI when engine stops
+    setTranscript('');
+    setIsListening(false);
+  };
+
+  // start listening
+  rec.start();
+  setIsListening(true);
+
+  // cleanup on unmount
+  return () => {
+    rec.stop();
+    recognitionRef.current = null;
+    setIsListening(false);
+  };
+}, [isGrammarSection, onSpeechInput, handleSpeechInput]);
+
+
+  
+ // Initialize speech recognition
   const recognition = useMemo(() => {
     if (!isSpeechApiSupported) return null;
     
@@ -204,11 +278,8 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
     return instance;
   }, [isSpeechApiSupported, onSpeechInput, isGrammarSection, handleSpeechInput]);
 
-  // Suggested commands carousel
-  useEffect(() => {
-    const suggested = commands.map(cmd => cmd.keywords[0]);
-    setSuggestedCommands(suggested);
-  }, []);
+  
+
 
   // Handle suggested command click
   const handleSuggestedCommandClick = useCallback((command: string) => {
@@ -216,93 +287,92 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
     speak(`I heard: ${command}`);
   }, [handleSpeechInput, speak]);
 
-  const SpeakButton: React.FC<{ isListening: boolean; onClick: () => void }> = ({ isListening, onClick }) => {
-    return (
-      <button
-        onClick={onClick}
-        className={`
-          w-12 h-12 rounded-full
-          bg-red-500 hover:bg-red-600
-          transition-colors duration-200
-          flex items-center justify-center
-          ${isListening ? 'bg-red-700' : ''}
-        `}
+const SpeakButton: React.FC<{ isListening: boolean; onClick: () => void }> = ({
+  isListening,
+  onClick,
+}) => (
+  <button
+    onClick={onClick}
+    aria-label={isListening ? "Stop Listening" : "Start Listening"}
+    className={`
+      relative w-12 h-12 rounded-full flex items-center justify-center text-white
+      bg-red-500 hover:bg-red-600 transition-colors duration-200
+      ${isListening ? "bg-red-700" : ""}
+    `}
+  >
+    {isListening && (
+      <span className="absolute inset-0 rounded-full ring-2 ring-red-400 animate-ping" />
+    )}
+
+    {isListening ? (
+      <Loader2 className="relative w-6 h-6 animate-spin" />
+    ) : (
+      <svg
+        className="relative w-6 h-6 text-white"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
       >
-        <svg
-          className="w-6 h-6 text-white"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-          />
-        </svg>
-      </button>
-    );
-  };
-
-  return (
-    <>
-      {/* Floating Speak Button */}
-      <div className="fixed bottom-4 right-4">
-        <SpeakButton
-          isListening={isListening}
-          onClick={() => {
-            if (isListening) {
-              recognition?.stop();
-              setIsListening(false);
-            } else {
-              if (recognition) {
-                recognition.start();
-                setIsListening(true);
-              }
-            }
-          }}
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
         />
-      </div>
+      </svg>
+    )}
+  </button>
+);
 
-      {/* Main content */}
-      <div className="space-y-4">
-        {/* Real-time Transcript */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm text-gray-600">
-              {transcript ? `I heard: ${transcript}` : "Listening for your command..."}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Error Message */}
-        {error && (
-          <Card className="bg-red-50 text-red-600">
-            <CardContent className="p-4">
-              <div className="text-sm">{error}</div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Suggested Commands Carousel */}
-        <div className="flex gap-2 overflow-x-auto p-1">
-          {suggestedCommands.map((command, index) => {
-            return (
+return (
+  <>
+    <div className="fixed bottom-4 right-4 flex flex-col items-end space-y-2 z-50">
+      {/* Transcript / Error / Suggestions Card */}
+      <div className="w-64 bg-white rounded-lg shadow-lg overflow-hidden">
+        <CardContent className="p-3">
+          <p className="text-sm text-gray-700 mb-2">
+            {transcript || "Listening for your command..."}
+          </p>
+          {error && (
+            <p className="text-xs text-red-600 mb-2 bg-red-50 p-2 rounded">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-1">
+            {suggestedCommands.map(cmd => (
               <button
-                key={index}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-sm"
-                onClick={() => handleSuggestedCommandClick(command)}
+                key={cmd}
+                className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+                onClick={() => handleSpeechInput(cmd)}
               >
-                {command}
+                {cmd}
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        </CardContent>
       </div>
-    </>
-  );
+
+      {/* Speak / Listening Toggle Button */}
+      <SpeakButton
+        isListening={isListening}
+        onClick={() => {
+          const rec = recognitionRef.current;
+          if (!rec) return;
+          if (isListening) {
+            rec.stop();
+            setIsListening(false);
+          } else {
+            rec.start();
+            setIsListening(true);
+          }
+        }}
+      />
+    </div>
+  </>
+);
+
 };
 
 export default VoiceControls;
