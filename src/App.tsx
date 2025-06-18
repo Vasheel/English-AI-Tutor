@@ -16,6 +16,7 @@ import ReadingPage from "@/pages/Reading";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import VoiceControls from "@/components/VoiceControls";
+import ChatBot from "@/components/ChatBot";
 
 const queryClient = new QueryClient();
 
@@ -69,9 +70,23 @@ const App = () => (
                   <GrammarTutor />
                 </ProtectedRoute>
               } />
+              <Route path="/chat" element={
+                <ProtectedRoute>
+                  <ChatBot 
+                    systemPrompt="You are an English learning assistant. Focus on grammar correction and vocabulary improvement." 
+                    model="gpt-3.5-turbo"
+                  />
+                </ProtectedRoute>
+              } />
               <Route path="*" element={<NotFound />} />
             </Routes>
-            <VoiceControls />
+            <VoiceControls 
+              onSpeechInput={(text) => {
+                // Handle the speech input here
+                console.log('Speech input:', text);
+                // You might want to dispatch this to your auth context or handle it in another way
+              }}
+            />
           </div>
         </BrowserRouter>
       </TooltipProvider>

@@ -6,6 +6,7 @@ const GrammarTutor: React.FC = () => {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const grammarCheckRef = useRef<() => Promise<void>>(null);
 
   const handleGrammarCheck = useCallback(async () => {
     if (!input.trim()) return;
@@ -56,61 +57,69 @@ const GrammarTutor: React.FC = () => {
     }
   }, [input, setLoading, setError, setOutput]);
 
-  const grammarCheckRef = useRef<() => Promise<void>>(null);
-
   useEffect(() => {
     grammarCheckRef.current = handleGrammarCheck;
   }, [handleGrammarCheck]);
 
+  const handleSpeechInput = useCallback((speech: string) => {
+    setInput(speech);
+  }, []);
+
   useEffect(() => {
-    const handleSpeechInput = (event: CustomEvent) => {
-      const { text, type } = event.detail;
-      if (type === 'grammar') {
-        setInput(text);
-        handleGrammarCheck();
-      }
-    };
-
-    // Listen for speech input events
-    window.addEventListener('speech-input', handleSpeechInput);
-
-    return () => {
-      window.removeEventListener('speech-input', handleSpeechInput);
-    };
-  }, [handleGrammarCheck, setInput]);
+    if (output) {
+      const utterance = new SpeechSynthesisUtterance();
+      utterance.text = `Here's the corrected version: ${output}`;
+      utterance.lang = 'en-US';
+      speechSynthesis.speak(utterance);
+    }
+  }, [output]);
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Grammar Correction</h1>
-
-      <div className="mb-4">
-        <VoiceControls />
-      </div>
-
-      <textarea
-        className="w-full border p-3 rounded mb-4"
-        rows={4}
-        placeholder="Type or speak your sentence here..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-      />
-
-      <button
-        onClick={handleGrammarCheck}
-        className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        disabled={loading}
-      >
-        {loading ? "Checking..." : "Check Grammar"}
-      </button>
-
-      {output && (
-        <div className="mt-4 p-4 bg-green-100 border border-green-300 rounded">
-          <strong>AI Tutor:</strong>
-          <p>{output}</p>
+    <div className="container mx-auto py-12">
+      <h1 className="text-3xl font-bold mb-8">Grammar Tutor</h1>
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-6">
+          <label className="block text-gray-700 text-sm font-bold mb-2">
+            Enter or speak a sentence to check:
+          </label>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between mb-4">
+              <VoiceControls onSpeechInput={handleSpeechInput} isGrammarSection={true} />
+              <button
+                onClick={() => handleGrammarCheck()}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                disabled={loading || !input.trim()}
+              >
+                {loading ? "Checking..." : "Check Grammar"}
+              </button>
+            </div>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={4}
+              placeholder="Type or speak a sentence..."
+            />
+          </div>
         </div>
-      )}
 
-      {error && <p className="text-red-600 mt-4">{error}</p>}
+        <button
+          onClick={() => grammarCheckRef.current?.()}
+          className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          disabled={loading}
+        >
+          {loading ? "Checking..." : "Check Grammar"}
+        </button>
+
+        {output && (
+          <div className="mt-4 p-4 bg-green-100 border border-green-300 rounded">
+            <strong>AI Tutor:</strong>
+            <p>{output}</p>
+          </div>
+        )}
+
+        {error && <p className="text-red-600 mt-4">{error}</p>}
+      </div>
     </div>
   );
 };

@@ -302,6 +302,10 @@ News of the magical garden spread throughout the neighborhood. Many people came 
     setClozeScore(0);
   };
 
+  const handleSpeechInput = useCallback((transcript: string) => {
+    console.log('Speech input:', transcript);
+  }, []);
+
   // Mode Selection Screen
   if (mode === 'select') {
     return (
@@ -350,7 +354,7 @@ News of the magical garden spread throughout the neighborhood. Many people came 
                 </CardContent>
               </Card>
             </div>
-            <VoiceControls />
+            <VoiceControls onSpeechInput={handleSpeechInput} />
           </CardContent>
         </Card>
       </div>

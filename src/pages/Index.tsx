@@ -5,9 +5,12 @@ import SupabaseProgressDashboard from "@/components/SupabaseProgressDashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Index = () => {
   const { progress } = useSupabaseProgress();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const getProgressForActivity = (activityType: string) => {
     const activityProgress = progress.find(p => p.activity_type === activityType);
@@ -16,6 +19,13 @@ const Index = () => {
   };
 
   const subjects = [
+    {
+      title: "English Tutor AI",
+      icon: "🤖",
+      color: "bg-edu-red",
+      progress: 100,
+      route: "/"
+    },
     {
       title: "English Grammar",
       icon: "✍️",
@@ -48,8 +58,15 @@ const Index = () => {
       title: "Practice Quizzes",
       icon: "📝",
       color: "bg-edu-yellow",
-      progress: getProgressForActivity('quiz'),
+      progress: getProgressForActivity('quizzes'),
       route: "/quizzes"
+    },
+    {
+      title: "English Tutor AI",
+      icon: "🤖",
+      color: "bg-edu-pink",
+      progress: 100,
+      route: "/chat"
     }
   ];
 
