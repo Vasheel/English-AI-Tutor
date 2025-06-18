@@ -86,51 +86,6 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
     synth.speak(utterance);
   }, [isTtsApiSupported, synth]);
 
-  // Initialize speech recognition
-  const recognition = useMemo(() => {
-    if (!isSpeechApiSupported) return null;
-    
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const instance = new SpeechRecognition();
-    
-    instance.continuous = true;
-    instance.interimResults = true;
-    instance.lang = 'en-US';
-
-    instance.onresult = (event) => {
-      const currentTranscript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join('');
-      
-      // Only process final results
-      if (event.results[event.results.length - 1].isFinal) {
-        // Clear transcript before processing
-        setTranscript('');
-        
-        if (isGrammarSection) {
-          onSpeechInput(currentTranscript);
-        } else {
-          handleSpeechInput(currentTranscript);
-        }
-      } else {
-        // Update interim transcript
-        setTranscript(currentTranscript);
-      }
-    };
-
-    instance.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setError(event.error);
-    };
-
-    instance.onend = () => {
-      // Reset transcript when recognition ends
-      setTranscript('');
-    };
-
-    return instance;
-  }, [isSpeechApiSupported, onSpeechInput, isGrammarSection]);
-
   // Handle speech input with fuzzy matching
   const handleSpeechInput = useCallback((text: string) => {
     // Clear transcript immediately to prevent accumulation
@@ -203,6 +158,51 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
       setError('Error processing your command');
     }
   }, [speak, navigate]);
+
+  // Initialize speech recognition
+  const recognition = useMemo(() => {
+    if (!isSpeechApiSupported) return null;
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const instance = new SpeechRecognition();
+    
+    instance.continuous = true;
+    instance.interimResults = true;
+    instance.lang = 'en-US';
+
+    instance.onresult = (event) => {
+      const currentTranscript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      
+      // Only process final results
+      if (event.results[event.results.length - 1].isFinal) {
+        // Clear transcript before processing
+        setTranscript('');
+        
+        if (isGrammarSection) {
+          onSpeechInput(currentTranscript);
+        } else {
+          handleSpeechInput(currentTranscript);
+        }
+      } else {
+        // Update interim transcript
+        setTranscript(currentTranscript);
+      }
+    };
+
+    instance.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setError(event.error);
+    };
+
+    instance.onend = () => {
+      // Reset transcript when recognition ends
+      setTranscript('');
+    };
+
+    return instance;
+  }, [isSpeechApiSupported, onSpeechInput, isGrammarSection, handleSpeechInput]);
 
   // Suggested commands carousel
   useEffect(() => {
