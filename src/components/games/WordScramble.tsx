@@ -15,7 +15,7 @@ type QuizType = {
 const WordScramble = () => {
 
 const [currentQuiz, setCurrentQuiz] = useState<QuizType | null>(null);
-const [currentWord, setCurrentWord] = useState(null); 
+const [currentWord, setCurrentWord] = useState(null);
 const [scrambledWord, setScrambledWord] = useState("");
 const [userAnswer, setUserAnswer] = useState("");
 const [score, setScore] = useState(0);
@@ -33,12 +33,13 @@ const [isCorrect, setIsCorrect] = useState(false);
   setUserAnswer(cleanedTranscript);
   playSound('click');
 
-  checkAnswer(cleanedTranscript, true); //  pass voice flag
-  setTimeout(() => {
-    nextWord(); //  manually trigger next word after delay
-  }, 2000);
+  checkAnswer(cleanedTranscript, true, currentWord?.word); // ✅ pass current word
 
+  setTimeout(() => {
+    nextWord();
+  }, 2000);
 },
+
       
     onError: (error) => {
       toast({
@@ -75,27 +76,30 @@ const nextWord = useCallback(() => {
 }, [playSound]);
 
 
-  const checkAnswer = (input: string = userAnswer, isFromVoice: boolean = false) => {
+  const checkAnswer = (
+  input: string = userAnswer,
+  isFromVoice: boolean = false,
+  targetWord: string = currentWord?.word || ""
+) => {
+  const cleanedInput = input.trim().toUpperCase();
+  const correctWord = targetWord.trim().toUpperCase();
 
-    const cleanedInput = input.trim().toUpperCase();
-    const correctWord = currentWord.word.trim().toUpperCase();
-    
-    console.log("🔍 Comparing:", `"${cleanedInput}"`, "vs", `"${correctWord}"`);
+  console.log("🔍 Comparing:", `"${cleanedInput}"`, "vs", `"${correctWord}"`);
 
-    const correct = cleanedInput === correctWord;
-    setIsCorrect(correct);
-    setShowResult(true);
-    setAttempts((prev) => prev + 1);
+  const correct = cleanedInput === correctWord;
+  setIsCorrect(correct);
+  setShowResult(true);
+  setAttempts((prev) => prev + 1);
 
-    if (correct) {
-      setScore((prev) => prev + 1);
-      playSound('correct');
-      toast({
-        title: "Correct! 🎉",
-        description: "Great job! You unscrambled the word!",
-      });
+  if (correct) {
+    setScore((prev) => prev + 1);
+    playSound("correct");
+    toast({
+      title: "Correct! 🎉",
+      description: "Great job! You unscrambled the word!",
+    });
 
-if (!isFromVoice) {
+    if (!isFromVoice) {
       setTimeout(() => {
         nextWord();
         if ((score + 1) % 5 === 0) playSound("levelup");
@@ -110,6 +114,7 @@ if (!isFromVoice) {
     });
   }
 };
+
 
   
   const handleVoiceToggle = () => {
