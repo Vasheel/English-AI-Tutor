@@ -3,6 +3,8 @@ import { Shuffle, CheckCircle, XCircle, RotateCcw, Mic, MicOff } from "lucide-re
 import { toast } from "@/components/ui/use-toast";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
+import { useSessionTimer } from "@/hooks/useSessionTimer";
 import { psacVocabulary, generateGrammarQuestion } from '../psacVocabulary.ts';
 
 type QuizType = {
@@ -26,6 +28,10 @@ const [isCorrect, setIsCorrect] = useState(false);
 const currentWordRef = useRef(null);
 
 const { playSound } = useSoundEffects();
+const { updateProgress, fetchProgress } = useSupabaseProgress();
+
+// Session timer to track actual time spent
+const { seconds: sessionTime, getFormattedTime } = useSessionTimer();
 
 const nextWord = useCallback(() => {
   const rawWord = psacVocabulary[Math.floor(Math.random() * psacVocabulary.length)];
@@ -45,7 +51,7 @@ const nextWord = useCallback(() => {
   playSound("click");
 }, [playSound]);
 
-const checkAnswer = useCallback((
+const checkAnswer = useCallback(async (
   input: string = userAnswer,
   isFromVoice: boolean = false,
   targetWord: string = ""
@@ -61,6 +67,23 @@ const checkAnswer = useCallback((
   setIsCorrect(correct);
   setShowResult(true);
   setAttempts((prev) => prev + 1);
+
+  // Update Supabase progress
+  try {
+    await updateProgress("word_scramble", {
+      total_attempts: 1,
+      correct_answers: correct ? 1 : 0,
+      total_time_spent: sessionTime, // Use actual session time
+      current_level: 1,
+      current_streak: correct ? 1 : 0,
+      best_streak: correct ? 1 : 0
+    });
+    
+    // Refresh progress data to update dashboard
+    await fetchProgress();
+  } catch (error) {
+    console.error("Error updating word scramble progress:", error);
+  }
 
   if (correct) {
     setScore((prev) => prev + 1);
@@ -84,7 +107,7 @@ const checkAnswer = useCallback((
       variant: "destructive",
     });
   }
-}, [userAnswer, playSound, score, nextWord]);
+}, [userAnswer, playSound, score, nextWord, updateProgress, fetchProgress, sessionTime]);
 
 const { isListening, isSupported, startListening, stopListening } = useVoiceRecognition({
   onResult: (transcript) => {
@@ -139,6 +162,7 @@ return (
       <div className="flex justify-between text-sm text-gray-600">
         <span>Score: {score}/{attempts}</span>
         <span>Accuracy: {attempts > 0 ? Math.round((score / attempts) * 100) : 0}%</span>
+        <span>Session: {getFormattedTime()}</span>
       </div>
     </div>
 

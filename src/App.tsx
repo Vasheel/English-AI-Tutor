@@ -17,6 +17,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import VoiceControls from "@/components/VoiceControls";
 import ChatBot from "@/components/ChatBot";
+import { ProgressProvider } from "./components/games/ProgressContext";
 
 const queryClient = new QueryClient();
 
@@ -47,7 +48,9 @@ const App = () => (
               } />
               <Route path="/games" element={
                 <ProtectedRoute>
-                  <Games />
+                  <ProgressProvider>
+                    <Games />
+                  </ProgressProvider>
                 </ProtectedRoute>
               } />
               <Route path="/reading" element={
@@ -62,7 +65,9 @@ const App = () => (
               } />
               <Route path="/progress" element={
                 <ProtectedRoute>
-                  <Progress />
+                  <ProgressProvider>
+                    <Progress />
+                  </ProgressProvider>
                 </ProtectedRoute>
               } />
               <Route path="/grammar-tutor" element={

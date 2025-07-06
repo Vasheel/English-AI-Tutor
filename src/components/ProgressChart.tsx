@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   LineChart,
@@ -13,19 +12,51 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Sample data
-const initialData = [
+export interface ProgressState {
+  name: string;
+  math: number;
+  science: number;
+  reading: number;
+  english?: number;
+}
+
+const initialData: ProgressState[] = [
   { name: "Week 1", math: 65, science: 40, reading: 55 },
   { name: "Week 2", math: 70, science: 45, reading: 60 },
   { name: "Week 3", math: 75, science: 55, reading: 68 },
   { name: "Week 4", math: 80, science: 60, reading: 72 },
 ];
 
-const ProgressChart = () => {
-  const [data, setData] = useState(initialData);
+interface ProgressChartProps {
+  data: ProgressState[];
+  selectedSubject: 'reading' | 'english' | 'math' | 'science';
+  viewType: 'weekly' | 'cumulative';
+}
+
+export default function ProgressChart({ data, selectedSubject, viewType }: ProgressChartProps) {
   const [animate, setAnimate] = useState(false);
 
+  // Generate ghost data for future weeks
+  const generateGhostData = (weeksAhead: number) => {
+    const lastWeek = parseInt(data[data.length - 1].name.split(' ')[1]);
+    return Array.from({ length: weeksAhead }, (_, i) => ({
+      name: `Week ${lastWeek + i + 1}`,
+      [selectedSubject]: 0,
+    }));
+  };
+
+  // Calculate cumulative data if needed
+  const cumulativeData = data.reduce((acc, current, index) => {
+    const cumulative = acc[index - 1] || { ...current };
+    cumulative[selectedSubject] = (cumulative[selectedSubject] || 0) + current[selectedSubject];
+    return [...acc, cumulative];
+  }, [] as ProgressState[]);
+
+  // Combine real and ghost data
+  const chartData = viewType === 'cumulative' ? cumulativeData : data;
+  const extendedData = [...chartData, ...generateGhostData(4)]; // Show 4 future weeks
+
   useEffect(() => {
-    // Add animation after component mounts
     const timer = setTimeout(() => setAnimate(true), 100);
     return () => clearTimeout(timer);
   }, []);
@@ -33,49 +64,23 @@ const ProgressChart = () => {
   return (
     <Card className={`overflow-hidden transition-all duration-500 ${animate ? 'opacity-100' : 'opacity-0'}`}>
       <CardHeader className="pb-0">
-        <CardTitle className="text-xl font-bold">Weekly Progress</CardTitle>
+        <CardTitle className="text-xl font-bold">{viewType === 'cumulative' ? 'Cumulative Progress' : 'Weekly Progress'}</CardTitle>
       </CardHeader>
       <CardContent className="pb-4">
         <div className="h-[300px] pt-4">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" stroke="#888888" fontSize={12} />
-              <YAxis stroke="#888888" fontSize={12} />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: "white", 
-                  borderRadius: "0.5rem",
-                  boxShadow: "0px 4px 15px rgba(0,0,0,0.1)",
-                  border: "none"
-                }}
-              />
-              <Legend />
+            <LineChart data={extendedData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
               <Line
                 type="monotone"
-                dataKey="math"
-                stroke="#9b87f5"
-                strokeWidth={3}
-                activeDot={{ r: 8 }}
-                animationDuration={2000}
-              />
-              <Line
-                type="monotone"
-                dataKey="science"
-                stroke="#4FD1C5"
-                strokeWidth={3}
-                activeDot={{ r: 8 }}
-                animationDuration={2000}
-                animationBegin={300}
-              />
-              <Line
-                type="monotone"
-                dataKey="reading"
-                stroke="#F6E05E"
-                strokeWidth={3}
-                activeDot={{ r: 8 }}
-                animationDuration={2000}
-                animationBegin={600}
+                dataKey={selectedSubject}
+                stroke={selectedSubject === 'reading' ? '#2563eb' : '#10b981'}
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -83,6 +88,4 @@ const ProgressChart = () => {
       </CardContent>
     </Card>
   );
-};
-
-export default ProgressChart;
+}

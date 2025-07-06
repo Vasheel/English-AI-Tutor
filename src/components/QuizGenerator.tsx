@@ -1,17 +1,18 @@
 // This version dynamically generates quiz questions from the PSAC vocabulary and grammar generator
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, CheckCircle, Clock, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSessionTimer } from "@/hooks/useSessionTimer";
 import { psacVocabulary, generateGrammarQuestion, VocabWord, GrammarQuestion } from "./psacVocabulary.ts";
 
 
 interface QuizModuleProps {
   difficulty: "easy" | "medium" | "hard";
-  onProgress: (score: number) => void;
+  onProgress: (score: number, sessionTime?: number) => void;
 }
 
 interface QuizItem {
@@ -30,6 +31,12 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const { toast } = useToast();
+  
+  // Use a ref to track the current score for accurate calculations
+  const scoreRef = useRef(0);
+  
+  // Session timer to track actual time spent
+  const { seconds: sessionTime, stop: stopSession, getFormattedTime } = useSessionTimer();
 
   const generateDynamicQuiz = useCallback(() => {
     const count = difficulty === "easy" ? 3 : difficulty === "medium" ? 4 : 5;
@@ -69,14 +76,28 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
 
   const completeQuiz = useCallback(() => {
     setQuizCompleted(true);
-    const finalScore = Math.round((score / quizList.length) * 100);
-    onProgress(finalScore);
+    stopSession(); // Stop the session timer
+    
+    // Use the ref value for accurate calculation
+    const currentScore = scoreRef.current;
+    const finalScore = Math.round((currentScore / quizList.length) * 100);
+    
+    console.log(`🎯 QuizGenerator completeQuiz:`, {
+      scoreState: score,
+      scoreRef: currentScore,
+      quizListLength: quizList.length,
+      finalScore,
+      sessionTime,
+      calculation: `Math.round((${currentScore} / ${quizList.length}) * 100) = ${finalScore}`
+    });
+    
+    onProgress(finalScore, sessionTime);
 
     toast({
       title: "Quiz completed!",
-      description: `You scored ${score}/${quizList.length} (${finalScore}%)`,
+      description: `You scored ${currentScore}/${quizList.length} (${finalScore}%) in ${getFormattedTime()}`,
     });
-  }, [score, quizList.length, onProgress, toast]);
+  }, [score, quizList.length, onProgress, toast, sessionTime, stopSession, getFormattedTime]);
 
   const handleTimeUp = useCallback(() => {
     setShowResult(true);
@@ -102,14 +123,24 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
     setSelectedAnswer(answer);
     setShowResult(true);
 
-    if (answer === quizList[currentQuestion].correct) {
-      setScore((prev) => prev + 1);
+    const isCorrect = answer === quizList[currentQuestion].correct;
+    
+    if (isCorrect) {
+      setScore((prev) => {
+        const newScore = prev + 1;
+        scoreRef.current = newScore; // Update the ref
+        console.log(`✅ Correct answer! Score updated: ${prev} → ${newScore}`);
+        return newScore;
+      });
+    } else {
+      console.log(`❌ Wrong answer. Score remains: ${scoreRef.current}`);
     }
 
     setTimeout(() => {
       if (currentQuestion < quizList.length - 1) {
         nextQuestion();
       } else {
+        console.log(`🏁 Final score before completeQuiz: ${scoreRef.current}`);
         completeQuiz();
       }
     }, 2000);
@@ -119,10 +150,12 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
     setCurrentQuestion(0);
     setSelectedAnswer(null);
     setScore(0);
+    scoreRef.current = 0; // Reset the ref
     setShowResult(false);
     setTimeLeft(30);
     setQuizCompleted(false);
     generateDynamicQuiz();
+    // Session timer will auto-restart when component re-renders
   };
 
   if (quizCompleted) {
@@ -186,8 +219,9 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
                 {timeLeft}s
               </span>
             </div>
-            <div className="text-sm text-gray-600">
-              Score: {score}/{currentQuestion + (showResult ? 1 : 0)}
+            <div className="flex items-center gap-4 text-sm text-gray-600">
+              <span>Session: {getFormattedTime()}</span>
+              <span>Score: {score}/{currentQuestion + (showResult ? 1 : 0)}</span>
             </div>
           </div>
 

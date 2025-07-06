@@ -44,7 +44,7 @@ const Index = () => {
       title: "Reading Comprehension",
       icon: "📚",
       color: "bg-edu-orange",
-      progress: getProgressForActivity('reading'),
+      progress: getProgressForActivity('reading_comprehension'),
       route: "/reading"
     },
     {
@@ -58,7 +58,7 @@ const Index = () => {
       title: "Practice Quizzes",
       icon: "📝",
       color: "bg-edu-yellow",
-      progress: getProgressForActivity('quizzes'),
+      progress: getProgressForActivity('quiz'),
       route: "/quizzes"
     },
     {

@@ -1,9 +1,12 @@
-
-import { useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { CheckCircle, RotateCcw, Shuffle, Mic, MicOff } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
+import { useSessionTimer } from "@/hooks/useSessionTimer";
+import { ProgressProvider } from "./ProgressContext.tsx";
+import { useProgress } from "./ProgressContextExports.tsx";
 
 interface Word {
   id: string;
@@ -11,7 +14,27 @@ interface Word {
   position?: number;
 }
 
+interface ProgressState {
+  score: number;
+  totalAttempts: number;
+  correctAttempts: number;
+  accuracy: number;
+  sessionStartTime: number;
+  sessionDuration: number;
+  currentLevel: number;
+  wordsMastered: number;
+  consecutiveCorrect: number;
+}
+
+interface ProgressContextType {
+  progress: ProgressState;
+  updateProgress: (updates: Partial<ProgressState>) => void;
+  resetProgress: () => void;
+}
+
 const SentenceBuilder = () => {
+  const { progress, updateProgress } = useProgress();
+  const { updateProgress: updateSupabaseProgress, fetchProgress } = useSupabaseProgress();
   const sentences = [
     { 
       words: ["The", "cat", "sits", "on", "the", "mat"],
@@ -35,50 +58,20 @@ const SentenceBuilder = () => {
   const [availableWords, setAvailableWords] = useState<Word[]>([]);
   const [sentenceSlots, setSentenceSlots] = useState<(Word | null)[]>([]);
   const [draggedWord, setDraggedWord] = useState<Word | null>(null);
-  const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
 
   const { playSound } = useSoundEffects();
+  
+  // Session timer to track actual time spent
+  const { seconds: sessionTime, getFormattedTime } = useSessionTimer();
 
   const { isListening, isSupported, startListening, stopListening } = useVoiceRecognition({
     onResult: (transcript) => {
-      // Process the spoken sentence and try to match words
-      const spokenWords = transcript.toLowerCase().split(' ').map(w => w.trim()).filter(w => w);
-      const targetWords = currentSentence.words.map(w => w.toLowerCase());
-      
-      // Auto-arrange words if the spoken sentence matches
-      if (spokenWords.length === targetWords.length) {
-        const newSlots: (Word | null)[] = new Array(targetWords.length).fill(null);
-        const usedWordIds: string[] = [];
-        
-        spokenWords.forEach((spokenWord, index) => {
-          const matchingAvailableWord = availableWords.find(w => 
-            w.text.toLowerCase() === spokenWord && !usedWordIds.includes(w.id)
-          );
-          
-          if (matchingAvailableWord) {
-            newSlots[index] = matchingAvailableWord;
-            usedWordIds.push(matchingAvailableWord.id);
-          }
-        });
-        
-        setSentenceSlots(newSlots);
-        setAvailableWords(prev => prev.filter(w => !usedWordIds.includes(w.id)));
-        playSound('click');
-        
-        toast({
-          title: "Voice Input Processed",
-          description: "I've arranged the words based on what you said!",
-        });
-      } else {
-        toast({
-          title: "Voice Input",
-          description: "Please speak the complete sentence clearly.",
-          variant: "destructive"
-        });
-      }
+      console.log('Voice transcript:', transcript);
+      processVoiceInput(transcript);
     },
     onError: (error) => {
+      console.error('Voice recognition error:', error);
       toast({
         title: "Voice Recognition Error",
         description: "Could not recognize speech. Please try again.",
@@ -86,6 +79,94 @@ const SentenceBuilder = () => {
       });
     }
   });
+
+  const processVoiceInput = (transcript: string) => {
+    // Clean up the transcript
+    const cleanTranscript = transcript.toLowerCase().trim();
+    
+    // Remove punctuation for comparison
+    const cleanSpoken = cleanTranscript.replace(/[.,!?;:]/g, '');
+    const cleanCorrect = currentSentence.correct.toLowerCase().replace(/[.,!?;:]/g, '');
+    
+    console.log('Clean spoken:', cleanSpoken);
+    console.log('Clean correct:', cleanCorrect);
+    console.log('Current sentence:', currentSentence);
+    
+    // Check if the spoken sentence matches the correct sentence
+    if (cleanSpoken === cleanCorrect) {
+      // Automatically arrange all words in correct order
+      arrangeWordsFromSpeech();
+      
+      toast({
+        title: "Perfect! 🎉",
+        description: "Voice input recognized correctly! Words arranged automatically.",
+      });
+      
+      // Auto-check the sentence after a brief delay
+      setTimeout(() => {
+        checkSentence();
+      }, 1000);
+      
+    } else {
+      // Try partial matching - arrange words that match
+      const spokenWords = cleanSpoken.split(' ').filter(w => w.length > 0);
+      const targetWords = currentSentence.words.map(w => w.toLowerCase());
+      
+      console.log('Spoken words:', spokenWords);
+      console.log('Target words:', targetWords);
+      
+      // Check if all target words are present in spoken words
+      const allTargetWordsPresent = targetWords.every(targetWord => 
+        spokenWords.includes(targetWord)
+      );
+      
+      if (allTargetWordsPresent && spokenWords.length === targetWords.length) {
+        // Words match but might be in wrong order
+        arrangeWordsFromSpeech(spokenWords);
+        
+        toast({
+          title: "Words Recognized",
+          description: "I've arranged the words as you spoke them. Check if the order is correct!",
+        });
+      } else {
+        toast({
+          title: "Speech Not Recognized",
+          description: "Please try speaking the sentence using the words shown below.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const arrangeWordsFromSpeech = (spokenWords?: string[]) => {
+    // If no spoken words provided, use the correct order
+    const wordsToArrange = spokenWords || currentSentence.words.map(w => w.toLowerCase());
+    
+    // Reset the sentence slots
+    const newSlots: (Word | null)[] = new Array(currentSentence.words.length).fill(null);
+    const usedWordIds: string[] = [];
+    
+    // Create a copy of available words to work with
+    const allWords = [...availableWords, ...sentenceSlots.filter(w => w !== null)] as Word[];
+    
+    wordsToArrange.forEach((spokenWord, index) => {
+      // Find matching word from available words (case-insensitive)
+      const matchingWord = allWords.find(word => 
+        word.text.toLowerCase() === spokenWord.toLowerCase() && 
+        !usedWordIds.includes(word.id)
+      );
+      
+      if (matchingWord && index < newSlots.length) {
+        newSlots[index] = matchingWord;
+        usedWordIds.push(matchingWord.id);
+      }
+    });
+    
+    // Update state
+    setSentenceSlots(newSlots);
+    setAvailableWords(allWords.filter(w => !usedWordIds.includes(w.id)));
+    playSound('click');
+  };
 
   const initializeGame = () => {
     const randomSentence = sentences[Math.floor(Math.random() * sentences.length)];
@@ -148,28 +229,53 @@ const SentenceBuilder = () => {
     }
   };
 
-  const checkSentence = () => {
+  const checkSentence = async () => {
     const builtSentence = sentenceSlots
       .filter(word => word !== null)
       .map(word => word!.text)
       .join(' ') + '.';
     
     const isCorrect = builtSentence === currentSentence.correct;
-    setAttempts(attempts + 1);
+    updateProgress({
+      totalAttempts: progress.totalAttempts + 1,
+      correctAttempts: isCorrect ? progress.correctAttempts + 1 : progress.correctAttempts,
+      consecutiveCorrect: isCorrect ? progress.consecutiveCorrect + 1 : 0
+    });
+
+    // Update Supabase progress
+    try {
+      await updateSupabaseProgress("sentence_builder", {
+        total_attempts: 1,
+        correct_answers: isCorrect ? 1 : 0,
+        total_time_spent: sessionTime, // Use actual session time
+        current_level: 1,
+        current_streak: isCorrect ? 1 : 0,
+        best_streak: isCorrect ? 1 : 0
+      });
+      
+      // Refresh progress data to update dashboard
+      await fetchProgress();
+    } catch (error) {
+      console.error("Error updating sentence builder progress:", error);
+    }
 
     if (isCorrect) {
-      setScore(score + 1);
+      updateProgress({
+        score: progress.score + 1,
+        wordsMastered: progress.wordsMastered + currentSentence.words.length
+      });
+      
       playSound('correct');
       toast({
         title: "Perfect! 🎉",
-        description: "You built the sentence correctly!",
+        description: `You built the sentence correctly! Accuracy: ${progress.accuracy}%`,
       });
-      setTimeout(() => {
-        initializeGame();
-        if ((score + 1) % 5 === 0) {
-          playSound('levelup');
-        }
-      }, 2000);
+      
+      // Level up logic
+      if ((progress.score + 1) % 5 === 0) {
+        updateProgress({ currentLevel: progress.currentLevel + 1 });
+        playSound('levelup');
+      }
     } else {
       playSound('incorrect');
       toast({
@@ -197,16 +303,18 @@ const SentenceBuilder = () => {
 
   useEffect(() => {
     initializeGame();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6 max-w-2xl mx-auto">
       <div className="text-center mb-6">
         <h3 className="text-xl font-bold text-blue-600 mb-2">🧩 Sentence Builder</h3>
-        <p className="text-sm text-gray-600 mb-2">Drag words to build a correct sentence!</p>
+        <p className="text-sm text-gray-600 mb-2">Drag words to build a correct sentence or speak it aloud!</p>
         <div className="flex justify-between text-sm text-gray-600">
-          <span>Score: {score}/{attempts}</span>
-          <span>Accuracy: {attempts > 0 ? Math.round((score / attempts) * 100) : 0}%</span>
+          <span>Score: {progress.score}/{progress.totalAttempts}</span>
+          <span>Accuracy: {progress.accuracy}%</span>
+          <span>Session: {getFormattedTime()}</span>
         </div>
       </div>
 
@@ -228,7 +336,7 @@ const SentenceBuilder = () => {
           
           {isListening && (
             <div className="mt-2 text-sm text-blue-600">
-              🎤 Listening... Speak the complete sentence clearly
+              🎤 Listening... Speak the sentence clearly
             </div>
           )}
         </div>
@@ -280,9 +388,9 @@ const SentenceBuilder = () => {
       {/* Controls */}
       <div className="flex gap-2">
         <button
-          onClick={() => {
+          onClick={async () => {
             playSound('click');
-            checkSentence();
+            await checkSentence();
           }}
           disabled={sentenceSlots.some(slot => slot === null)}
           className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
