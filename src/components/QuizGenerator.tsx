@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, CheckCircle, Clock, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
 import { psacVocabulary, generateGrammarQuestion, VocabWord, GrammarQuestion } from "./psacVocabulary.ts";
-
 
 interface QuizModuleProps {
   difficulty: "easy" | "medium" | "hard";
@@ -29,7 +29,9 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
   const [showResult, setShowResult] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [quizCompleted, setQuizCompleted] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState(Date.now());
   const { toast } = useToast();
+  const { updateProgress, addSession, getProgressByType } = useSupabaseProgress();
 
   const generateDynamicQuiz = useCallback(() => {
     const count = difficulty === "easy" ? 3 : difficulty === "medium" ? 4 : 5;
@@ -56,8 +58,44 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
     setQuizList(selected);
   }, [difficulty]);
 
+  const updateProgressData = useCallback(async () => {
+    const currentProgress = getProgressByType('quiz');
+    const timeSpent = Math.floor((Date.now() - sessionStartTime) / 60000); // Convert to minutes
+    const finalScore = Math.round((score / quizList.length) * 100);
+    
+    // Update user progress
+    await updateProgress('quiz', {
+      total_attempts: (currentProgress?.total_attempts || 0) + quizList.length,
+      correct_answers: (currentProgress?.correct_answers || 0) + score,
+      total_time_spent: (currentProgress?.total_time_spent || 0) + Math.max(1, timeSpent),
+      current_level: Math.floor(((currentProgress?.correct_answers || 0) + score) / 10) + 1,
+      current_streak: finalScore >= 80 ? (currentProgress?.current_streak || 0) + 1 : 0,
+      best_streak: finalScore >= 80 ? Math.max((currentProgress?.best_streak || 0), (currentProgress?.current_streak || 0) + 1) : (currentProgress?.best_streak || 0)
+    });
+
+    // Add session record
+    await addSession({
+      user_id: '', // Will be filled by the hook
+      activity_type: 'quiz',
+      score: score,
+      total_questions: quizList.length,
+      time_spent: Math.floor((Date.now() - sessionStartTime) / 1000), // In seconds
+      difficulty_level: difficulty === "easy" ? 1 : difficulty === "medium" ? 2 : 3,
+      session_data: {
+        difficulty: difficulty,
+        final_score: finalScore,
+        questions_data: quizList.map((q, idx) => ({
+          question: q.question,
+          selected: idx === currentQuestion ? selectedAnswer : null,
+          correct: q.correct
+        }))
+      }
+    });
+  }, [updateProgress, addSession, getProgressByType, score, quizList, difficulty, sessionStartTime, selectedAnswer, currentQuestion]);
+
   useEffect(() => {
     generateDynamicQuiz();
+    setSessionStartTime(Date.now());
   }, [generateDynamicQuiz]);
 
   const nextQuestion = useCallback(() => {
@@ -67,16 +105,19 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
     setTimeLeft(30);
   }, []);
 
-  const completeQuiz = useCallback(() => {
+  const completeQuiz = useCallback(async () => {
     setQuizCompleted(true);
     const finalScore = Math.round((score / quizList.length) * 100);
     onProgress(finalScore);
+
+    // Update progress in Supabase
+    await updateProgressData();
 
     toast({
       title: "Quiz completed!",
       description: `You scored ${score}/${quizList.length} (${finalScore}%)`,
     });
-  }, [score, quizList.length, onProgress, toast]);
+  }, [score, quizList.length, onProgress, toast, updateProgressData]);
 
   const handleTimeUp = useCallback(() => {
     setShowResult(true);
@@ -122,6 +163,7 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
     setShowResult(false);
     setTimeLeft(30);
     setQuizCompleted(false);
+    setSessionStartTime(Date.now());
     generateDynamicQuiz();
   };
 
@@ -155,12 +197,12 @@ const QuizGenerator = ({ difficulty, onProgress }: QuizModuleProps) => {
   }
 
   if (!quizList.length || !quizList[currentQuestion]) {
-  return (
-    <div className="text-center text-gray-600 p-4">
-      Loading questions...
-    </div>
-  );
-}
+    return (
+      <div className="text-center text-gray-600 p-4">
+        Loading questions...
+      </div>
+    );
+  }
 
   const current = quizList[currentQuestion];
 
