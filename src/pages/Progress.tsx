@@ -1,5 +1,5 @@
 import NavBar from "@/components/NavBar";
-import ProgressChart from "@/components/ProgressChart";
+import SupabaseProgressDashboard from "@/components/SupabaseProgressDashboard";
 import AchievementBadge from "@/components/AchievementBadge";
 import StudentProgressCard from "@/components/StudentProgressCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,6 +99,10 @@ const Progress = () => {
           Track your achievements and monitor your academic growth.
         </p>
 
+        {/* Old-style dashboard replacing subject-based cards and chart */}
+        <SupabaseProgressDashboard />
+
+        {/*
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           <div className="lg:col-span-2">
             <Card>
@@ -120,6 +124,7 @@ const Progress = () => {
             <StudentProgressCard data={progressData} />
           </div>
         </div>
+        */}
 
         <Tabs defaultValue="achievements" className="mb-8">
           <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto">
