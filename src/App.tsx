@@ -18,6 +18,9 @@ import NotFound from "./pages/NotFound";
 import VoiceControls from "@/components/VoiceControls";
 import ChatBot from "@/components/ChatBot";
 import { ProgressProvider } from "./components/games/ProgressContext";
+import ExerciseGenerator from "@/components/ExerciseGenerator";
+import AdaptiveDifficultyDashboard from "@/components/AdaptiveDifficultyDashboard";
+import AIQuestionDemo from "@/components/AIQuestionDemo";
 
 const queryClient = new QueryClient();
 
@@ -73,6 +76,21 @@ const App = () => (
               <Route path="/grammar-tutor" element={
                 <ProtectedRoute>
                   <GrammarTutor />
+                </ProtectedRoute>
+              } />
+              <Route path="/exercise-generator" element={
+                <ProtectedRoute>
+                  <ExerciseGenerator />
+                </ProtectedRoute>
+              } />
+              <Route path="/adaptive-dashboard" element={
+                <ProtectedRoute>
+                  <AdaptiveDifficultyDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/ai-demo" element={
+                <ProtectedRoute>
+                  <AIQuestionDemo />
                 </ProtectedRoute>
               } />
               <Route path="/chat" element={

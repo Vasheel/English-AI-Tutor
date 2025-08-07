@@ -1,11 +1,24 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Shuffle, CheckCircle, XCircle, RotateCcw, Mic, MicOff } from "lucide-react";
+import { Shuffle, CheckCircle, XCircle, RotateCcw, Mic, MicOff, Lightbulb, RefreshCw, Brain } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
 import { useSessionTimer } from "@/hooks/useSessionTimer";
+import { useAdaptiveDifficulty, AIQuestion } from "@/hooks/useAdaptiveDifficulty";
 import { psacVocabulary, generateGrammarQuestion } from '../psacVocabulary.ts';
+import { 
+  getRandomWord, 
+  getRandomGrammarQuestion, 
+  resetUsedContent,
+  getUsageStats 
+} from '@/utils/dynamicContentGenerator';
+import { 
+  generateAIWordScramble, 
+  generateAIQuestions, 
+  clearAICache,
+  getAICacheStats 
+} from '@/utils/aiQuestionGenerator';
 
 type QuizType = {
   question: string;
@@ -23,9 +36,14 @@ const WordScramble = () => {
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState(Date.now());
+  const [hintsUsed, setHintsUsed] = useState(0);
+  const [showHint, setShowHint] = useState(false);
+  const [aiQuestion, setAiQuestion] = useState<AIQuestion | null>(null);
+  const [aiQuestionLoading, setAiQuestionLoading] = useState(false);
 
   // Use a ref to store the current word so voice recognition can access the latest value
   const currentWordRef = useRef(null);
+  const questionStartTimeRef = useRef<number | null>(null);
 
   const { playSound } = useSoundEffects();
   const { updateProgress, addSession, getProgressByType } = useSupabaseProgress();
@@ -33,8 +51,36 @@ const WordScramble = () => {
   // Session timer to track actual time spent
   const { seconds: sessionTime, getFormattedTime } = useSessionTimer();
 
-  const nextWord = useCallback(() => {
-    const rawWord = psacVocabulary[Math.floor(Math.random() * psacVocabulary.length)];
+  // Adaptive difficulty system
+  const {
+    currentDifficulty,
+    accuracy,
+    avgResponseTime,
+    startQuestionTimer,
+    getElapsedTime,
+    updateStudentProgress,
+    generateAIQuestion,
+    getCachedQuestion,
+    loading: adaptiveLoading
+  } = useAdaptiveDifficulty('word_scramble');
+
+  const nextWord = useCallback(async () => {
+    // Try to get AI-generated word first, fallback to static content
+    let rawWord;
+    try {
+      const aiWord = await generateAIWordScramble(
+        currentDifficulty === 1 ? 'easy' : currentDifficulty === 2 ? 'medium' : 'hard'
+      );
+      rawWord = {
+        word: aiWord.word,
+        hint: aiWord.hint,
+        topic: aiWord.topic
+      };
+    } catch (error) {
+      console.error('AI word generation failed, using fallback:', error);
+      rawWord = getRandomWord();
+    }
+    
     const cleanedWord = rawWord.word.trim().toUpperCase();
     
     const newWord = { ...rawWord, word: cleanedWord };
@@ -47,9 +93,71 @@ const WordScramble = () => {
     setUserAnswer("");
     setShowResult(false);
     setIsCorrect(false);
-    setCurrentQuiz(generateGrammarQuestion(rawWord));
+    setHintsUsed(0);
+    setShowHint(false);
+    
+    // Start tracking time for this question
+    startQuestionTimer();
+    questionStartTimeRef.current = Date.now();
+    
+    // Generate AI questions for grammar and vocabulary
+    setAiQuestionLoading(true);
+    try {
+      // Generate AI grammar questions
+      const aiQuestions = await generateAIQuestions(
+        currentDifficulty === 1 ? 'easy' : currentDifficulty === 2 ? 'medium' : 'hard',
+        'grammar',
+        1
+      );
+      
+      if (aiQuestions.length > 0) {
+        const aiQuestion = aiQuestions[0];
+        setCurrentQuiz({
+          question: aiQuestion.question,
+          options: aiQuestion.options || [],
+          answer: aiQuestion.correctAnswer
+        });
+      } else {
+        // Fallback to static grammar question
+        setCurrentQuiz(getRandomGrammarQuestion(rawWord));
+      }
+      
+      // Generate AI vocabulary question
+      const vocabQuestions = await generateAIQuestions(
+        currentDifficulty === 1 ? 'easy' : currentDifficulty === 2 ? 'medium' : 'hard',
+        'vocabulary',
+        1
+      );
+      
+      if (vocabQuestions.length > 0) {
+        const vocabQuestion = vocabQuestions[0];
+        setAiQuestion({
+          question: vocabQuestion.question,
+          options: vocabQuestion.options || [],
+          answer: vocabQuestion.correctAnswer,
+          explanation: vocabQuestion.explanation
+        });
+      } else {
+        // Fallback to cached question
+        const cachedQuestion = await getCachedQuestion(currentDifficulty);
+        if (cachedQuestion) {
+          setAiQuestion(cachedQuestion);
+        }
+      }
+    } catch (error) {
+      console.error('Error generating AI questions:', error);
+      // Fallback to static content
+      setCurrentQuiz(getRandomGrammarQuestion(rawWord));
+      const cachedQuestion = await getCachedQuestion(currentDifficulty);
+      if (cachedQuestion) {
+        setAiQuestion(cachedQuestion);
+      }
+    } finally {
+      setAiQuestionLoading(false);
+    }
+    
     playSound("click");
-  }, [playSound]);
+  }, [playSound, currentDifficulty, startQuestionTimer, getCachedQuestion, generateAIQuestion]);
 
   const updateProgressData = useCallback(async (correct: boolean) => {
     const currentProgress = getProgressByType('word_scramble');
@@ -71,19 +179,35 @@ const WordScramble = () => {
       score: correct ? 1 : 0,
       total_questions: 1,
       time_spent: Math.max(30, Math.floor((Date.now() - sessionStartTime) / 1000)), // In seconds
-      difficulty_level: 1,
+      difficulty_level: currentDifficulty,
       session_data: {
         word_scramble_data: {
           word: currentWordRef.current?.word || '',
           user_answer: userAnswer,
-          correct: correct
+          correct: correct,
+          hints_used: hintsUsed,
+          response_time: getElapsedTime()
         }
       }
     });
 
+    // Update adaptive difficulty progress
+    const responseTime = getElapsedTime();
+    await updateStudentProgress(
+      correct,
+      responseTime,
+      hintsUsed,
+      {
+        questionText: `Unscramble the word: ${scrambledWord}`,
+        userAnswer: userAnswer,
+        correctAnswer: currentWordRef.current?.word || '',
+        aiGenerated: false
+      }
+    );
+
     // Reset session timer
     setSessionStartTime(Date.now());
-  }, [updateProgress, addSession, getProgressByType, userAnswer, sessionStartTime]);
+  }, [updateProgress, addSession, getProgressByType, userAnswer, sessionStartTime, currentDifficulty, getElapsedTime, updateStudentProgress, scrambledWord, hintsUsed]);
 
   const checkAnswer = useCallback(async (
     input: string = userAnswer,
@@ -151,6 +275,14 @@ const WordScramble = () => {
     }
   });
 
+  const handleShowHint = () => {
+    if (!showHint) {
+      setShowHint(true);
+      setHintsUsed(prev => prev + 1);
+      playSound('click');
+    }
+  };
+
   console.log("Voice recognition supported?", isSupported);
 
   const scrambleWord = (word: string) => {
@@ -171,18 +303,46 @@ const WordScramble = () => {
   };
 
   useEffect(() => {
+    // Reset used content when component mounts to ensure fresh content
+    resetUsedContent();
     nextWord();
     setSessionStartTime(Date.now());
   }, [nextWord]);
+
+  // Add a function to show usage stats (for debugging)
+  const showUsageStats = () => {
+    const stats = getUsageStats();
+    console.log('📊 Content Usage Stats:', stats);
+    toast({
+      title: "Content Stats",
+      description: `${stats.usedWords}/${stats.totalWords} words used, ${stats.remainingWords} remaining`,
+    });
+  };
+
+  if (adaptiveLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-md p-6 max-w-md mx-auto">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading adaptive difficulty...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6 max-w-md mx-auto">
       <div className="text-center mb-6">
         <h3 className="text-xl font-bold text-purple-600 mb-2">🔤 Word Scramble</h3>
-        <div className="flex justify-between text-sm text-gray-600">
+        <div className="flex justify-between text-sm text-gray-600 mb-2">
           <span>Score: {score}/{attempts}</span>
           <span>Accuracy: {attempts > 0 ? Math.round((score / attempts) * 100) : 0}%</span>
           <span>Session: {getFormattedTime()}</span>
+        </div>
+        <div className="flex justify-between text-xs text-gray-500">
+          <span>Difficulty: {currentDifficulty}/3</span>
+          <span>Avg Time: {Math.round(avgResponseTime)}s</span>
+          <span>Hints: {hintsUsed}</span>
         </div>
       </div>
 
@@ -194,6 +354,11 @@ const WordScramble = () => {
           <p className="text-sm text-gray-600">
             💡 Hint: {currentWord ? currentWord.hint : "Loading..."}
           </p>
+          {showHint && currentWord && (
+            <p className="text-xs text-blue-600 mt-2">
+              💡 Extra hint: {currentWord.word.length} letters, starts with "{currentWord.word[0]}"
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 mb-4">
@@ -227,6 +392,37 @@ const WordScramble = () => {
           )}
         </div>
       </div>
+      
+      {/* AI Generated Question */}
+      {aiQuestion && !aiQuestionLoading && (
+        <div className="bg-blue-50 p-3 rounded mb-4">
+          <div className="font-semibold mb-2 text-blue-800">🧠 AI Challenge (Level {currentDifficulty}):</div>
+          <div className="mb-2 text-sm">{aiQuestion.question}</div>
+          {aiQuestion.options && (
+            <div className="space-y-1">
+              {aiQuestion.options.map((option, idx) => (
+                <div key={idx} className="text-xs text-gray-700">
+                  {String.fromCharCode(65 + idx)}. {option}
+                </div>
+              ))}
+            </div>
+          )}
+          {aiQuestion.explanation && (
+            <div className="text-xs text-blue-600 mt-2">
+              💡 {aiQuestion.explanation}
+            </div>
+          )}
+        </div>
+      )}
+
+      {aiQuestionLoading && (
+        <div className="bg-blue-50 p-3 rounded mb-4">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span className="text-sm text-blue-800">Generating AI question...</span>
+          </div>
+        </div>
+      )}
       
       {currentQuiz ? (
         <div className="bg-yellow-100 p-3 rounded mb-4">
@@ -265,6 +461,15 @@ const WordScramble = () => {
         >
           <Shuffle className="h-4 w-4" />
         </button>
+
+        <button
+          onClick={handleShowHint}
+          disabled={showHint || showResult}
+          className="bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          title="Get a hint"
+        >
+          <Lightbulb className="h-4 w-4" />
+        </button>
       </div>
 
       {showResult && (
@@ -284,13 +489,46 @@ const WordScramble = () => {
       )}
 
       {!showResult && (
-        <button
-          onClick={nextWord}
-          className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 flex items-center justify-center gap-2"
-        >
-          <RotateCcw className="h-4 w-4" />
-          Skip Word
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={nextWord}
+            className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 flex items-center justify-center gap-2"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Skip Word
+          </button>
+          
+          <button
+            onClick={() => {
+              resetUsedContent();
+              clearAICache();
+              nextWord();
+              toast({
+                title: "Content Reset",
+                description: "All content has been reset for fresh variety!",
+              });
+            }}
+            className="w-full bg-blue-300 text-blue-700 py-2 px-4 rounded-lg hover:bg-blue-400 flex items-center justify-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Reset Content
+          </button>
+          
+          <button
+            onClick={() => {
+              const stats = getAICacheStats();
+              console.log('🤖 AI Cache Stats:', stats);
+              toast({
+                title: "AI Cache Stats",
+                description: `${stats.totalCachedQuestions} questions, ${stats.totalCachedWords} words cached`,
+              });
+            }}
+            className="w-full bg-purple-300 text-purple-700 py-2 px-4 rounded-lg hover:bg-purple-400 flex items-center justify-center gap-2"
+          >
+            <Brain className="h-4 w-4" />
+            AI Stats
+          </button>
+        </div>
       )}
 
       {isListening && (

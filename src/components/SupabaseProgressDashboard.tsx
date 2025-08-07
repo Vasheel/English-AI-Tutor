@@ -49,8 +49,20 @@ const SupabaseProgressDashboard = () => {
     ? Math.round((totalCorrect / totalAttempts) * 100)
     : 0;
 
+  // Activity display name mapping
+  const getActivityDisplayName = (activityType: string) => {
+    const nameMap: { [key: string]: string } = {
+      'quiz': 'Quizzes',
+      'word_scramble': 'Word Scramble',
+      'sentence_builder': 'Sentence Builder',
+      'reading_comprehension': 'Reading',
+      'grammar_exercises': 'Grammar Exercises'
+    };
+    return nameMap[activityType] || activityType.replace('_', ' ').toUpperCase();
+  };
+
   // Filter activities for display but keep all data for calculations
-  const validActivities = ['quiz', 'word_scramble', 'sentence_builder', 'reading_comprehension'];
+  const validActivities = ['quiz', 'word_scramble', 'sentence_builder', 'reading_comprehension', 'grammar_exercises'];
   const filteredProgress = progress.filter(p => validActivities.includes(p.activity_type));
 
   console.log('📈 Calculated dashboard stats:', {
@@ -200,7 +212,7 @@ const SupabaseProgressDashboard = () => {
             <Card key={activity}>
               <CardContent>
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold">{activity.replace('_', ' ').toUpperCase()}</h3>
+                  <h3 className="font-semibold">{getActivityDisplayName(activity)}</h3>
                   <div className={`text-sm ${getAccuracyColor(activityAccuracy)}`}>
                     {activityAccuracy}%
                   </div>

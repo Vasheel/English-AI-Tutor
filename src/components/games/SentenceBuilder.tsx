@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { CheckCircle, RotateCcw, Shuffle, Mic, MicOff } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
@@ -59,13 +59,28 @@ const SentenceBuilder = () => {
   const [sentenceSlots, setSentenceSlots] = useState<(Word | null)[]>([]);
   const [draggedWord, setDraggedWord] = useState<Word | null>(null);
   const [attempts, setAttempts] = useState(0);
+  // Add state to show last transcript
+  const [lastTranscript, setLastTranscript] = useState<string>("");
+  // Add a ref to always point to the latest currentSentence
+  const currentSentenceRef = useRef(currentSentence);
+  useEffect(() => {
+    currentSentenceRef.current = currentSentence;
+  }, [currentSentence]);
+  // Add a ref to lock the sentence at the start of listening
+  const listeningSentenceRef = useRef(currentSentence);
+
+  // Add a ref to always point to the latest currentSentence
+  useEffect(() => {
+    currentSentenceRef.current = currentSentence;
+  }, [currentSentence]);
 
   const { playSound } = useSoundEffects();
   
   // Session timer to track actual time spent
   const { seconds: sessionTime, getFormattedTime } = useSessionTimer();
 
-  const { isListening, isSupported, startListening, stopListening } = useVoiceRecognition({
+  // Patch startListening to lock the sentence
+  const { isListening, isSupported, startListening: origStartListening, stopListening } = useVoiceRecognition({
     onResult: (transcript) => {
       console.log('Voice transcript:', transcript);
       processVoiceInput(transcript);
@@ -79,19 +94,39 @@ const SentenceBuilder = () => {
       });
     }
   });
+  // Wrap startListening to lock the sentence
+  const startListening = () => {
+    listeningSentenceRef.current = currentSentenceRef.current;
+    origStartListening();
+  };
 
+  // Use the ref in processVoiceInput
   const processVoiceInput = (transcript: string) => {
+    setLastTranscript(transcript); // Show transcript to user
     // Clean up the transcript
     const cleanTranscript = transcript.toLowerCase().trim();
     
     // Remove punctuation for comparison
     const cleanSpoken = cleanTranscript.replace(/[.,!?;:]/g, '');
-    const cleanCorrect = currentSentence.correct.toLowerCase().replace(/[.,!?;:]/g, '');
+    // Use the locked sentence from ref
+    const sentence = listeningSentenceRef.current;
+    const cleanCorrect = sentence.correct.toLowerCase().replace(/[.,!?;:]/g, '');
     
     console.log('Clean spoken:', cleanSpoken);
     console.log('Clean correct:', cleanCorrect);
-    console.log('Current sentence:', currentSentence);
+    console.log('Current sentence:', sentence);
     
+    // Helper: word overlap
+    function wordOverlap(a: string, b: string) {
+      const aWords = a.split(' ');
+      const bWords = b.split(' ');
+      let matches = 0;
+      aWords.forEach(word => {
+        if (bWords.includes(word)) matches++;
+      });
+      return matches / bWords.length;
+    }
+
     // Check if the spoken sentence matches the correct sentence
     if (cleanSpoken === cleanCorrect) {
       // Automatically arrange all words in correct order
@@ -110,7 +145,7 @@ const SentenceBuilder = () => {
     } else {
       // Try partial matching - arrange words that match
       const spokenWords = cleanSpoken.split(' ').filter(w => w.length > 0);
-      const targetWords = currentSentence.words.map(w => w.toLowerCase());
+      const targetWords = sentence.words.map(w => w.toLowerCase());
       
       console.log('Spoken words:', spokenWords);
       console.log('Target words:', targetWords);
@@ -120,8 +155,18 @@ const SentenceBuilder = () => {
         spokenWords.includes(targetWord)
       );
       
-      if (allTargetWordsPresent && spokenWords.length === targetWords.length) {
-        // Words match but might be in wrong order
+      // Fuzzy match: at least 70% overlap
+      const overlap = wordOverlap(cleanSpoken, cleanCorrect);
+      if (overlap >= 0.7) {
+        arrangeWordsFromSpeech(spokenWords);
+        toast({
+          title: "Almost perfect!",
+          description: `I heard: "${transcript}". That's close enough! Words arranged as you spoke them.`,
+        });
+        setTimeout(() => {
+          checkSentence();
+        }, 1000);
+      } else if (allTargetWordsPresent && spokenWords.length === targetWords.length) {
         arrangeWordsFromSpeech(spokenWords);
         
         toast({
@@ -131,7 +176,7 @@ const SentenceBuilder = () => {
       } else {
         toast({
           title: "Speech Not Recognized",
-          description: "Please try speaking the sentence using the words shown below.",
+          description: `I heard: "${transcript}". Please try speaking the sentence using the words shown below.`,
           variant: "destructive"
         });
       }
@@ -301,6 +346,12 @@ const SentenceBuilder = () => {
     }
   };
 
+  // Stop listening before starting a new sentence
+  const handleNewSentence = () => {
+    stopListening();
+    initializeGame();
+  };
+
   useEffect(() => {
     initializeGame();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,6 +388,12 @@ const SentenceBuilder = () => {
           {isListening && (
             <div className="mt-2 text-sm text-blue-600">
               🎤 Listening... Speak the sentence clearly
+            </div>
+          )}
+          {/* Show last transcript */}
+          {lastTranscript && (
+            <div className="mt-2 text-sm text-gray-700">
+              <span className="font-semibold">Transcript:</span> "{lastTranscript}"
             </div>
           )}
         </div>
@@ -408,7 +465,7 @@ const SentenceBuilder = () => {
         </button>
         
         <button
-          onClick={initializeGame}
+          onClick={handleNewSentence}
           className="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center gap-2"
         >
           <Shuffle className="h-4 w-4" />

@@ -9,10 +9,13 @@ const NavBar = () => {
   const navItems = [
     { path: "/", label: "Home", icon: "🏠" },
     { path: "/grammar", label: "Grammar", icon: "✍️" },
+    { path: "/exercise-generator", label: "Exercises", icon: "📝" },
     { path: "/games", label: "Games", icon: "🎮" },
     { path: "/reading", label: "Reading", icon: "📚" },
     { path: "/quizzes", label: "Quizzes", icon: "📝" },
     { path: "/progress", label: "Progress", icon: "📊" },
+    { path: "/adaptive-dashboard", label: "AI Learning", icon: "🧠" },
+    { path: "/ai-demo", label: "AI Demo", icon: "🤖" },
   ];
 
   return (
