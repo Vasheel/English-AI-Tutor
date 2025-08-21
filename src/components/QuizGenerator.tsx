@@ -4,9 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, XCircle, Clock, Trophy, Brain, RefreshCw } from 'lucide-react';
-import { generateAIQuestions, clearAICache, getAICacheStats } from '@/utils/aiQuestionGenerator';
+import { CheckCircle, XCircle, Clock, Trophy, Brain } from 'lucide-react';
+import { generateQuiz as fetchQuiz, BackendQuizResponse } from '@/lib/api'; // <-- new: backend RAG API
+import { useQuizAttempts } from "@/hooks/useQuizAttempts";
 
+// ===============================
+// Types
+// ===============================
 interface QuizQuestion {
   id: string;
   type: 'multiple-choice' | 'cloze';
@@ -23,10 +27,12 @@ interface QuizGeneratorProps {
   onProgress: (score: number, sessionTime?: number) => void;
 }
 
-// Dynamic question generation with variety
+// ===============================
+// Local fallback generator (unchanged)
+// ===============================
 const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQuestion[] => {
   const baseQuestions: QuizQuestion[] = [
-    // Multiple Choice Grammar Questions
+    // --- (your existing fallback questions kept intact) ---
     {
       id: 'mcq-1',
       type: 'multiple-choice',
@@ -51,7 +57,7 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       id: 'mcq-3',
       type: 'multiple-choice',
       question: 'Select the correct plural form: "The _____ are flying in the sky."',
-      options: ['bird', 'birds', 'birdes', 'bird\'s'],
+      options: ['bird', 'birds', "birdes", "bird's"],
       correctAnswer: 'birds',
       explanation: 'The plural form of "bird" is "birds" - we simply add "s" to make it plural.',
       difficulty: 'easy',
@@ -77,23 +83,21 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       difficulty: 'medium',
       category: 'grammar'
     },
-    
-    // Cloze Questions (Passage Fill-in)
     {
       id: 'cloze-1',
       type: 'cloze',
       question: 'Complete the passage:\n\nTom is a student. He _____ to school every morning. His school _____ near his house. He _____ his friends there and they _____ together.',
       correctAnswer: 'goes,is,meets,study',
-      explanation: 'The passage requires present simple tense verbs: "goes" (3rd person), "is" (location), "meets" (3rd person), "study" (plural subject).',
+      explanation: 'Present simple tense verbs: goes, is, meets, study.',
       difficulty: 'easy',
       category: 'grammar'
     },
     {
       id: 'cloze-2',
       type: 'cloze',
-      question: 'Fill in the blanks:\n\nThe weather _____ beautiful today. The sun _____ shining and birds _____ singing. It\'s a perfect day for a _____ in the park.',
+      question: "Fill in the blanks:\n\nThe weather _____ beautiful today. The sun _____ shining and birds _____ singing. It's a perfect day for a _____ in the park.",
       correctAnswer: 'is,is,are,walk',
-      explanation: 'Present continuous tense for ongoing actions: "is" (weather), "is" (sun), "are" (birds), and "walk" as a noun.',
+      explanation: 'Use present/continuous appropriately: is, is, are, walk.',
       difficulty: 'medium',
       category: 'grammar'
     },
@@ -102,18 +106,17 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       type: 'cloze',
       question: 'Complete the story:\n\nYesterday, Sarah _____ to the library. She _____ a book about animals. The book _____ very interesting. She _____ it for two hours.',
       correctAnswer: 'went,bought,was,read',
-      explanation: 'Past simple tense: "went" (go), "bought" (buy), "was" (be), "read" (read).',
+      explanation: 'Past simple: went, bought, was, read.',
       difficulty: 'medium',
       category: 'grammar'
     },
-    // Additional Multiple Choice Questions
     {
       id: 'mcq-6',
       type: 'multiple-choice',
       question: 'Which word is the opposite of "difficult"?',
       options: ['easy', 'hard', 'tough', 'strong'],
       correctAnswer: 'easy',
-      explanation: 'The opposite of "difficult" is "easy".',
+      explanation: 'Opposite of difficult is easy.',
       difficulty: 'easy',
       category: 'vocabulary'
     },
@@ -123,27 +126,26 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       question: 'Choose the correct preposition: "He is good ___ math."',
       options: ['at', 'in', 'on', 'with'],
       correctAnswer: 'at',
-      explanation: 'The correct preposition is "at" (good at something).',
+      explanation: '“Good at” is the correct collocation.',
       difficulty: 'easy',
       category: 'grammar'
     },
     {
       id: 'mcq-8',
       type: 'multiple-choice',
-      question: 'Which sentence is correct?',
-      options: ['She don\'t like apples.', 'She doesn\'t likes apples.', 'She doesn\'t like apples.', 'She not like apples.'],
-      correctAnswer: 'She doesn\'t like apples.',
-      explanation: 'The correct negative form is "doesn\'t like" for third person singular.',
+      question: "Which sentence is correct?",
+      options: ["She don't like apples.", "She doesn't likes apples.", "She doesn't like apples.", 'She not like apples.'],
+      correctAnswer: "She doesn't like apples.",
+      explanation: "Negative form with 3rd person singular: doesn't like.",
       difficulty: 'easy',
       category: 'grammar'
     },
-    // Additional Cloze Questions
     {
       id: 'cloze-4',
       type: 'cloze',
       question: 'Fill in the blanks:\n\nMy father _____ (drive) to work every day. He _____ (not/use) the bus because it _____ (take) too long.',
       correctAnswer: 'drives,does not use,takes',
-      explanation: 'Present simple tense: "drives", "does not use", "takes".',
+      explanation: 'Present simple agreement.',
       difficulty: 'easy',
       category: 'grammar'
     },
@@ -152,7 +154,7 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       type: 'cloze',
       question: 'Complete the passage:\n\nThe children _____ (play) in the garden. Their mother _____ (watch) them from the window.',
       correctAnswer: 'are playing,is watching',
-      explanation: 'Present continuous tense: "are playing", "is watching".',
+      explanation: 'Present continuous forms.',
       difficulty: 'easy',
       category: 'grammar'
     },
@@ -161,18 +163,17 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       type: 'cloze',
       question: 'Fill in the blanks:\n\nYesterday, we _____ (go) to the zoo. We _____ (see) many animals and _____ (have) a lot of fun.',
       correctAnswer: 'went,saw,had',
-      explanation: 'Past simple tense: "went", "saw", "had".',
+      explanation: 'Past simple forms.',
       difficulty: 'easy',
       category: 'grammar'
     },
-    // Medium difficulty questions
     {
       id: 'mcq-9',
       type: 'multiple-choice',
       question: 'Which sentence uses the correct conditional form?',
       options: ['If I will see him, I will tell him.', 'If I see him, I will tell him.', 'If I saw him, I will tell him.', 'If I see him, I tell him.'],
       correctAnswer: 'If I see him, I will tell him.',
-      explanation: 'First conditional: present simple in if-clause, will + base form in main clause.',
+      explanation: 'First conditional structure.',
       difficulty: 'medium',
       category: 'grammar'
     },
@@ -182,18 +183,17 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       question: 'Choose the correct passive voice: "The letter _____ by John yesterday."',
       options: ['writes', 'wrote', 'was written', 'is written'],
       correctAnswer: 'was written',
-      explanation: 'Past simple passive: was/were + past participle.',
+      explanation: 'Past simple passive: was + past participle.',
       difficulty: 'medium',
       category: 'grammar'
     },
-    // Hard difficulty questions
     {
       id: 'mcq-11',
       type: 'multiple-choice',
       question: 'Which sentence demonstrates the subjunctive mood?',
       options: ['I wish I was rich.', 'I wish I were rich.', 'I am rich.', 'I will be rich.'],
       correctAnswer: 'I wish I were rich.',
-      explanation: 'The subjunctive "were" is used after "wish" for hypothetical situations.',
+      explanation: 'Subjunctive “were” with wish/hypothetical.',
       difficulty: 'hard',
       category: 'grammar'
     },
@@ -203,15 +203,14 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       question: 'Identify the gerund in the sentence: "Swimming is my favorite sport."',
       options: ['Swimming', 'is', 'my', 'sport'],
       correctAnswer: 'Swimming',
-      explanation: '"Swimming" is a gerund (verb form ending in -ing used as a noun).',
+      explanation: '“Swimming” is used as a noun.',
       difficulty: 'hard',
       category: 'grammar'
     }
   ];
 
-  // Filter questions by difficulty and shuffle them
-  const filteredQuestions = baseQuestions.filter(q => q.difficulty === difficulty);
-  return shuffleArray(filteredQuestions);
+  const filtered = baseQuestions.filter(q => q.difficulty === difficulty);
+  return shuffleArray(filtered);
 };
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -223,8 +222,56 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr;
 }
 
+// How many questions we want each run
 const QUESTIONS_PER_QUIZ = 3;
 
+// ===============================
+// Adapter: backend JSON -> your UI format
+// ===============================
+function adaptBackendQuizToUI(backendQuiz: BackendQuizResponse, difficulty: QuizQuestion['difficulty']): QuizQuestion[] {
+  // backend item.type: 'mcq' | 'fitb' | 'reorder' | 'match' | 'short'
+  // we’ll map supported types to your two: 'multiple-choice' | 'cloze'
+  const out: QuizQuestion[] = [];
+  for (const [idx, it] of (backendQuiz.items || []).entries()) {
+    if (it.type === 'mcq') {
+      out.push({
+        id: it.id || `mcq-${idx}`,
+        type: 'multiple-choice',
+        question: String(it.question || ''),
+        options: Array.isArray(it.options) ? it.options : [],
+        correctAnswer: typeof it.answer === 'number' && Array.isArray(it.options)
+          ? it.options[it.answer] ?? ''
+          : String(it.answer ?? ''),
+        explanation: String(it.explanation ?? ''),
+        difficulty,
+        category: 'grammar' // default; could be refined based on source_spans/section
+      });
+    } else if (it.type === 'fitb') {
+      // Ensure the question shows blanks. If none in text, add a single blank marker.
+      const q = String(it.question || '');
+      const questionWithBlanks = q.includes('_____') ? q : `${q} _____`;
+      out.push({
+        id: it.id || `fitb-${idx}`,
+        type: 'cloze',
+        question: questionWithBlanks,
+        // For cloze we expect a comma-separated correctAnswer
+        correctAnswer: Array.isArray(it.answer) ? it.answer.join(',') : String(it.answer ?? ''),
+        explanation: String(it.explanation ?? ''),
+        difficulty,
+        category: 'grammar'
+      });
+    } else {
+      // Skip unsupported types for now
+      continue;
+    }
+    if (out.length >= QUESTIONS_PER_QUIZ) break;
+  }
+  return out;
+}
+
+// ===============================
+// Component
+// ===============================
 const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<string[]>([]);
@@ -237,44 +284,51 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
   const [feedback, setFeedback] = useState<string>('');
   const [showExplanation, setShowExplanation] = useState(false);
   const [shuffledQuestions, setShuffledQuestions] = useState<QuizQuestion[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const { persistQuiz, recordAttempt } = useQuizAttempts();
+  const [quizId, setQuizId] = useState<string | null>(null);
 
+  // Load questions from backend (RAG). Fallback to local dynamic set if it fails.
   useEffect(() => {
-    // Generate AI questions first, fallback to static content
-    const generateQuestions = async () => {
+    const load = async () => {
+      setError(null);
       try {
-        // Generate AI questions for different categories
-        const grammarQuestions = await generateAIQuestions(difficulty, 'grammar', 2);
-        const vocabularyQuestions = await generateAIQuestions(difficulty, 'vocabulary', 1);
-        
-        // Combine AI questions with fallback questions
-        const aiQuestions = [...grammarQuestions, ...vocabularyQuestions];
-        const fallbackQuestions = generateDynamicQuestions(difficulty);
-        
-        // Convert AI questions to QuizQuestion format
-        const convertedAIQuestions: QuizQuestion[] = aiQuestions.map((q, index) => ({
-          id: q.id || `ai-${index}`,
-          type: q.type,
-          question: q.question,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation,
-          difficulty: q.difficulty,
-          category: q.category
-        }));
-        
-        // Use AI questions first, then fallback if needed
-        const allQuestions = [...convertedAIQuestions, ...fallbackQuestions];
-        const shuffled = shuffleArray(allQuestions);
-        
-        setShuffledQuestions(shuffled.slice(0, Math.min(QUESTIONS_PER_QUIZ, shuffled.length)));
-      } catch (error) {
-        console.error('AI question generation failed, using fallback:', error);
-        // Use fallback questions if AI fails
-        const dynamicQuestions = generateDynamicQuestions(difficulty);
-        const shuffled = shuffleArray(dynamicQuestions);
-        setShuffledQuestions(shuffled.slice(0, Math.min(QUESTIONS_PER_QUIZ, shuffled.length)));
+        // You can parameterize unit/skills from a parent control later if needed
+        const backendQuiz = await fetchQuiz({
+          unit: null,
+          skills: ['vocabulary', 'grammar', 'reading'],
+          count: QUESTIONS_PER_QUIZ,
+          difficulty: 'PSAC-G6',
+          query: 'PSAC Grade 6 English'
+        });
+        console.log('Backend quiz:', backendQuiz);
+        const adapted = adaptBackendQuizToUI(backendQuiz, difficulty);
+        if (adapted.length > 0) {
+          setShuffledQuestions(adapted);
+        } else {
+          // fallback: local
+          const dyn = shuffleArray(generateDynamicQuestions(difficulty)).slice(0, QUESTIONS_PER_QUIZ);
+          setShuffledQuestions(dyn);
+        }
+
+        // Persist the generated quiz JSON once (backend success case)
+        if (backendQuiz) {
+          try {
+            const saved = await persistQuiz(backendQuiz);
+            // saved is expected to be { id: string }
+            // Store the quiz id for subsequent attempt logging
+            setQuizId(saved.id);
+          } catch (err) {
+            console.warn('Failed to save quiz in Supabase:', err);
+          }
+        }
+      } catch (e: unknown) {
+        setError('Using fallback questions (backend not reachable).');
+        const dyn = shuffleArray(generateDynamicQuestions(difficulty)).slice(0, QUESTIONS_PER_QUIZ);
+        setShuffledQuestions(dyn);
       }
-      
+
+      // reset session data
       setCurrentQuestionIndex(0);
       setSelectedAnswers([]);
       setClozeAnswers(Array(QUESTIONS_PER_QUIZ).fill([]));
@@ -286,18 +340,18 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
       setShowExplanation(false);
     };
 
-    generateQuestions();
-  }, [difficulty]);
+    load();
+  }, [difficulty, persistQuiz]);
 
-  const currentQuestion = shuffledQuestions[currentQuestionIndex];
-
+  // Timer
   useEffect(() => {
-    const timer = setInterval(() => {
+    const t = setInterval(() => {
       setSessionTime(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
-
-    return () => clearInterval(timer);
+    return () => clearInterval(t);
   }, [startTime]);
+
+  const currentQuestion = shuffledQuestions[currentQuestionIndex];
 
   const handleMultipleChoiceAnswer = (answer: string) => {
     const newAnswers = [...selectedAnswers];
@@ -325,20 +379,46 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
       if (allCorrect) {
         return { isCorrect: true, feedback: 'Correct! Well done!' };
       } else {
-        const feedback = userParts.map((ans, idx) => ans === correctParts[idx] ? '✔️' : `❌ (${ans} → ${correctParts[idx]})`).join(' ');
-        return { isCorrect: false, feedback: `Some answers are incorrect. ${feedback}` };
+        const diff = userParts.map((ans, idx) => ans === correctParts[idx] ? '✔️' : `❌ (${ans} → ${correctParts[idx]})`).join(' ');
+        return { isCorrect: false, feedback: `Some answers are incorrect. ${diff}` };
       }
     } else {
       const isCorrect = userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
-      if (isCorrect) {
-        return { isCorrect: true, feedback: 'Correct! Well done!' };
-      } else {
-        return { isCorrect: false, feedback: `Incorrect. The correct answer is: ${correctAnswer}` };
-      }
+      return isCorrect
+        ? { isCorrect: true, feedback: 'Correct! Well done!' }
+        : { isCorrect: false, feedback: `Incorrect. The correct answer is: ${correctAnswer}` };
     }
   };
 
   const handleNextQuestion = async () => {
+    // Log the student's attempt for the current item before moving on
+    try {
+      if (quizId && currentQuestion) {
+        let userAnswer = '';
+        if (currentQuestion.type === 'multiple-choice') {
+          userAnswer = selectedAnswers[currentQuestionIndex] || '';
+        } else if (currentQuestion.type === 'cloze') {
+          userAnswer = Array.isArray(clozeAnswers[currentQuestionIndex])
+            ? clozeAnswers[currentQuestionIndex].join(',')
+            : '';
+        }
+
+        await recordAttempt({
+          quiz_id: quizId,
+          item_id: currentQuestion.id,
+          skill: currentQuestion.category,
+          user_answer: userAnswer,
+          is_correct:
+            userAnswer.trim().toLowerCase() ===
+            currentQuestion.correctAnswer.trim().toLowerCase(),
+          time_ms: sessionTime * 1000,
+          user_id: null,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to record attempt:', err);
+    }
+
     if (currentQuestionIndex < shuffledQuestions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setShowExplanation(false);
@@ -350,44 +430,27 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
 
   const handleQuizComplete = async () => {
     setIsLoading(true);
-    
+
     let correctCount = 0;
-    const totalQuestions = shuffledQuestions.length;
-    for (let i = 0; i < totalQuestions; i++) {
-      const question = shuffledQuestions[i];
+    const total = shuffledQuestions.length;
+    for (let i = 0; i < total; i++) {
+      const q = shuffledQuestions[i];
       let userAnswer = '';
-      if (question.type === 'multiple-choice') {
+      if (q.type === 'multiple-choice') {
         userAnswer = selectedAnswers[i] || '';
-      } else if (question.type === 'cloze') {
+      } else if (q.type === 'cloze') {
         userAnswer = Array.isArray(clozeAnswers[i]) ? clozeAnswers[i].join(',') : '';
       }
-      const validation = await validateAnswer(userAnswer, question.correctAnswer);
-      if (validation.isCorrect) {
-        correctCount++;
-      }
+      const validation = await validateAnswer(userAnswer, q.correctAnswer);
+      if (validation.isCorrect) correctCount++;
     }
 
-    const finalScore = Math.round((correctCount / totalQuestions) * 100);
+    const finalScore = Math.round((correctCount / total) * 100);
     setScore(finalScore);
     setShowResults(true);
     setIsLoading(false);
 
     onProgress(finalScore, sessionTime);
-  };
-
-  const resetQuiz = () => {
-    const dynamicQuestions = generateDynamicQuestions(difficulty);
-    const shuffled = shuffleArray(dynamicQuestions);
-    setShuffledQuestions(shuffled.slice(0, Math.min(QUESTIONS_PER_QUIZ, shuffled.length)));
-    setCurrentQuestionIndex(0);
-    setSelectedAnswers([]);
-    setClozeAnswers(Array(shuffled.length).fill([]));
-    setShowResults(false);
-    setScore(0);
-    setStartTime(Date.now());
-    setSessionTime(0);
-    setFeedback('');
-    setShowExplanation(false);
   };
 
   const renderMultipleChoiceQuestion = () => (
@@ -410,8 +473,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
   );
 
   const renderClozeQuestion = () => {
-    const questionText = currentQuestion.question;
-    const parts = questionText.split('_____');
+    const parts = currentQuestion.question.split('_____');
     return (
       <div className="space-y-4">
         <div className="text-lg font-semibold text-gray-800">
@@ -445,7 +507,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
           <Brain className="w-16 h-16 text-blue-500" />
         )}
       </div>
-      
+
       <div>
         <h2 className="text-2xl font-bold mb-2">
           {score >= 80 ? 'Excellent!' : score >= 60 ? 'Good Job!' : 'Keep Practicing!'}
@@ -457,50 +519,6 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
           Time taken: {Math.floor(sessionTime / 60)}m {sessionTime % 60}s
         </p>
       </div>
-
-      <div className="space-y-4">
-        <Button onClick={resetQuiz} className="w-full">
-          Try Again
-        </Button>
-        <Button variant="outline" onClick={() => setShowExplanation(!showExplanation)} className="w-full">
-          {showExplanation ? 'Hide' : 'Show'} Explanations
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={() => {
-            const stats = getAICacheStats();
-            console.log('🤖 AI Cache Stats:', stats);
-            alert(`AI Cache Stats:\n${stats.totalCachedQuestions} questions\n${stats.totalCachedWords} words cached`);
-          }} 
-          className="w-full"
-        >
-          <Brain className="h-4 w-4 mr-2" />
-          AI Stats
-        </Button>
-      </div>
-
-      {showExplanation && (
-        <div className="mt-6 space-y-4">
-          <h3 className="text-lg font-semibold">Question Explanations</h3>
-          {shuffledQuestions.map((question, index) => (
-            <Card key={question.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <Badge variant={selectedAnswers[index] === question.correctAnswer ? "default" : "destructive"}>
-                    {selectedAnswers[index] === question.correctAnswer ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                  </Badge>
-                  <div className="flex-1">
-                    <p className="font-medium mb-2">Question {index + 1}: {question.question}</p>
-                    <p className="text-sm text-gray-600">Your answer: {question.type === 'cloze' ? (clozeAnswers[index] && clozeAnswers[index].length > 0 ? clozeAnswers[index].join(', ') : 'Not answered') : (selectedAnswers[index] || 'Not answered')}</p>
-                    <p className="text-sm text-gray-600">Correct answer: {question.correctAnswer}</p>
-                    <p className="text-sm text-blue-600 mt-2">{question.explanation}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
     </div>
   );
 
@@ -518,9 +536,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-blue-700">Quiz Complete!</CardTitle>
         </CardHeader>
-        <CardContent>
-          {renderResults()}
-        </CardContent>
+        <CardContent>{renderResults()}</CardContent>
       </Card>
     );
   }
@@ -529,7 +545,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
     <Card className="bg-white rounded-xl shadow-md p-6 max-w-2xl mx-auto">
       <CardHeader>
         <div className="flex justify-between items-center">
-          <CardTitle className="text-2xl font-bold text-blue-700">Dynamic Quiz</CardTitle>
+          <CardTitle className="text-2xl font-bold text-blue-700">Dynamic Quiz (Textbook-backed)</CardTitle>
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-gray-500" />
             <span className="text-sm text-gray-600">
@@ -537,7 +553,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
             </span>
           </div>
         </div>
-        
+
         <div className="space-y-2">
           <div className="flex justify-between text-sm text-gray-600">
             <span>Question {currentQuestionIndex + 1} of {shuffledQuestions.length}</span>
@@ -551,6 +567,8 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
           <Badge variant="outline" className="capitalize">{currentQuestion.type.replace('-', ' ')}</Badge>
           <Badge variant="outline" className="capitalize">{currentQuestion.difficulty}</Badge>
         </div>
+
+        {error && <div className="text-xs text-amber-600 mt-2">{error}</div>}
       </CardHeader>
 
       <CardContent className="space-y-6">
@@ -570,12 +588,22 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
           >
             Previous
           </Button>
-          
-          <Button
-            onClick={handleNextQuestion}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Processing...' : currentQuestionIndex === shuffledQuestions.length - 1 ? 'Finish Quiz' : 'Next Question'}
+
+          <Button onClick={async () => {
+            // validate current question for per-item feedback (optional)
+            const q = currentQuestion;
+            let userAnswer = '';
+            if (q.type === 'multiple-choice') {
+              userAnswer = (selectedAnswers[currentQuestionIndex] || '');
+            } else if (q.type === 'cloze') {
+              userAnswer = (clozeAnswers[currentQuestionIndex] || []).join(',');
+            }
+            const res = await validateAnswer(userAnswer, q.correctAnswer);
+            setFeedback(res.feedback);
+            setShowExplanation(!res.isCorrect ? true : false);
+            await handleNextQuestion();
+          }}>
+            {currentQuestionIndex === shuffledQuestions.length - 1 ? 'Finish Quiz' : 'Next Question'}
           </Button>
         </div>
       </CardContent>
@@ -583,4 +611,4 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
   );
 };
 
-export default QuizGenerator; 
+export default QuizGenerator;
