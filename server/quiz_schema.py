@@ -18,6 +18,7 @@ class QuizItem(BaseModel):
 
 class BackendQuizResponse(BaseModel):
     items: Optional[List[QuizItem]] = None
+    source: Optional[str] = None
 
 
 class GenerateQuizPayload(BaseModel):

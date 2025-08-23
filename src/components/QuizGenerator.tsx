@@ -226,50 +226,6 @@ function shuffleArray<T>(array: T[]): T[] {
 const QUESTIONS_PER_QUIZ = 3;
 
 // ===============================
-// Adapter: backend JSON -> your UI format
-// ===============================
-function adaptBackendQuizToUI(backendQuiz: BackendQuizResponse, difficulty: QuizQuestion['difficulty']): QuizQuestion[] {
-  // backend item.type: 'mcq' | 'fitb' | 'reorder' | 'match' | 'short'
-  // we’ll map supported types to your two: 'multiple-choice' | 'cloze'
-  const out: QuizQuestion[] = [];
-  for (const [idx, it] of (backendQuiz.items || []).entries()) {
-    if (it.type === 'mcq') {
-      out.push({
-        id: it.id || `mcq-${idx}`,
-        type: 'multiple-choice',
-        question: String(it.question || ''),
-        options: Array.isArray(it.options) ? it.options : [],
-        correctAnswer: typeof it.answer === 'number' && Array.isArray(it.options)
-          ? it.options[it.answer] ?? ''
-          : String(it.answer ?? ''),
-        explanation: String(it.explanation ?? ''),
-        difficulty,
-        category: 'grammar' // default; could be refined based on source_spans/section
-      });
-    } else if (it.type === 'fitb') {
-      // Ensure the question shows blanks. If none in text, add a single blank marker.
-      const q = String(it.question || '');
-      const questionWithBlanks = q.includes('_____') ? q : `${q} _____`;
-      out.push({
-        id: it.id || `fitb-${idx}`,
-        type: 'cloze',
-        question: questionWithBlanks,
-        // For cloze we expect a comma-separated correctAnswer
-        correctAnswer: Array.isArray(it.answer) ? it.answer.join(',') : String(it.answer ?? ''),
-        explanation: String(it.explanation ?? ''),
-        difficulty,
-        category: 'grammar'
-      });
-    } else {
-      // Skip unsupported types for now
-      continue;
-    }
-    if (out.length >= QUESTIONS_PER_QUIZ) break;
-  }
-  return out;
-}
-
-// ===============================
 // Component
 // ===============================
 const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress }) => {
@@ -285,6 +241,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
   const [showExplanation, setShowExplanation] = useState(false);
   const [shuffledQuestions, setShuffledQuestions] = useState<QuizQuestion[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [backendSource, setBackendSource] = useState<string | null>(null);
   const { persistQuiz, recordAttempt } = useQuizAttempts();
   const [quizId, setQuizId] = useState<string | null>(null);
 
@@ -302,14 +259,54 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
           query: 'PSAC Grade 6 English'
         });
         console.log('Backend quiz:', backendQuiz);
-        const adapted = adaptBackendQuizToUI(backendQuiz, difficulty);
-        if (adapted.length > 0) {
-          setShuffledQuestions(adapted);
-        } else {
-          // fallback: local
-          const dyn = shuffleArray(generateDynamicQuestions(difficulty)).slice(0, QUESTIONS_PER_QUIZ);
-          setShuffledQuestions(dyn);
-        }
+        
+        // Use ONLY backend items when the call succeeds
+        const mapped = (backendQuiz.items || []).map((it, idx) => {
+          if (it.type === "mcq") {
+            return {
+              id: it.id || `backend-${idx}`,
+              type: "multiple-choice" as const,
+              question: String(it.question || ''),
+              options: Array.isArray(it.options) ? it.options : [],
+              correctAnswer: typeof it.answer === "number" && Array.isArray(it.options) 
+                ? it.options[it.answer] ?? "" 
+                : String(it.answer || ''),
+              explanation: String(it.explanation || ''),
+              difficulty: difficulty,
+              category: "grammar" as const,
+            };
+          } else if (it.type === "fitb") {
+            // For cloze questions, ensure proper formatting
+            const question = String(it.question || '');
+            const questionWithBlanks = question.includes('_____') ? question : `${question} _____`;
+            return {
+              id: it.id || `backend-${idx}`,
+              type: "cloze" as const,
+              question: questionWithBlanks,
+              correctAnswer: Array.isArray(it.answer) ? it.answer.join(',') : String(it.answer || ''),
+              explanation: String(it.explanation || ''),
+              difficulty: difficulty,
+              category: "grammar" as const,
+            };
+          } else {
+            // Default to multiple choice for unsupported types
+            return {
+              id: it.id || `backend-${idx}`,
+              type: "multiple-choice" as const,
+              question: String(it.question || ''),
+              options: Array.isArray(it.options) ? it.options : [],
+              correctAnswer: typeof it.answer === "number" && Array.isArray(it.options) 
+                ? it.options[it.answer] ?? "" 
+                : String(it.answer || ''),
+              explanation: String(it.explanation || ''),
+              difficulty: difficulty,
+              category: "grammar" as const,
+            };
+          }
+        });
+
+        setShuffledQuestions(mapped.slice(0, Math.min(QUESTIONS_PER_QUIZ, mapped.length)));
+        setBackendSource(backendQuiz.source ?? "rag");
 
         // Persist the generated quiz JSON once (backend success case)
         if (backendQuiz) {
@@ -323,9 +320,11 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
           }
         }
       } catch (e: unknown) {
+        // Only fall back to static questions if the backend call actually fails
         setError('Using fallback questions (backend not reachable).');
         const dyn = shuffleArray(generateDynamicQuestions(difficulty)).slice(0, QUESTIONS_PER_QUIZ);
         setShuffledQuestions(dyn);
+        setBackendSource("fallback");
       }
 
       // reset session data
@@ -569,6 +568,15 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
         </div>
 
         {error && <div className="text-xs text-amber-600 mt-2">{error}</div>}
+        {backendSource && (
+          <div className="text-xs mt-2">
+            {backendSource === "rag" ? (
+              <span className="text-green-700 bg-green-100 px-2 py-1 rounded">Textbook (RAG)</span>
+            ) : backendSource === "fallback" ? (
+              <span className="text-amber-700 bg-amber-100 px-2 py-1 rounded">Fallback</span>
+            ) : null}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-6">

@@ -32,6 +32,7 @@ type GenerateQuizPayload = {
       answer: string | number | string[];
       explanation?: string;
     }>;
+    source?: string;
   };
   
   // OPTIONAL: forward Supabase Auth token (if you use it).

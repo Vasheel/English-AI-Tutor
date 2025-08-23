@@ -112,7 +112,9 @@ def _fallback_items(payload: GenerateQuizPayload) -> BackendQuizResponse:
 			)
 		)
 
-	return BackendQuizResponse(items=quiz_items[:count])
+	import random
+	random.shuffle(quiz_items)
+	return BackendQuizResponse(items=quiz_items[:count], source="fallback")
 
 
 @app.post("/api/quizzes/generate", response_model=BackendQuizResponse)
@@ -120,9 +122,11 @@ def generate_quiz(payload: GenerateQuizPayload) -> BackendQuizResponse:
 	# Use OpenAI official client when configured; otherwise fallback
 	api_key = os.getenv("OPENAI_API_KEY")
 	if not api_key:
+		print("[LLM] No OpenAI API key found → using fallback items")
 		return _fallback_items(payload)
 	oai_client = OpenAI(api_key=api_key)
 	model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+	print("[LLM] OpenAI client created successfully")
 
 	# --- NEW: retrieve passages from the textbook via FAISS ---
 	# Make sure you ran:  python server/build_index.py
@@ -204,7 +208,8 @@ def generate_quiz(payload: GenerateQuizPayload) -> BackendQuizResponse:
 
 		if not parsed_items:
 			return _fallback_items(payload)
-		return BackendQuizResponse(items=parsed_items[: (payload.count or 3)])
+		source = "rag" if len(passages) > 0 else "fallback"
+		return BackendQuizResponse(items=parsed_items[: (payload.count or 3)], source=source)
 
 	except Exception:
 		# Fall back silently so the UI remains usable during setup
