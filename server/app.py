@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,34 +15,84 @@ from dotenv import load_dotenv
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=ENV_PATH)
 
-try:
-	from .quiz_schema import (
-		AttemptPayload,
-		BackendQuizResponse,
-		QuizItem,
-		GenerateQuizPayload,
-		NextDifficultyRequest,
-		NextDifficultyResponse,
-		SaveQuizRequest,
-		SaveQuizResponse,
-	)
-except Exception:
-	from quiz_schema import (
-		AttemptPayload,
-		BackendQuizResponse,
-		QuizItem,
-		GenerateQuizPayload,
-		NextDifficultyRequest,
-		NextDifficultyResponse,
-		SaveQuizRequest,
-		SaveQuizResponse,
-	)
+from .quiz_schema import (
+	AttemptPayload,
+	BackendQuizResponse,
+	QuizItem,
+	GenerateQuizPayload,
+	NextDifficultyRequest,
+	NextDifficultyResponse,
+	SaveQuizRequest,
+	SaveQuizResponse,
+)
+from .retriever import search as rag_search
 
-# Import retriever
-try:
-	from .retriever import search as rag_search
-except ImportError:
-	from retriever import search as rag_search
+# Helper functions for normalizing quiz items
+LETTER_TO_INDEX = {"a": 0, "b": 1, "c": 2, "d": 3}
+
+def _strip_letter_prefix(s: str) -> str:
+	# removes "A:", "B)", "c -", etc.
+	return re.sub(r"^\s*[A-Da-d]\s*[:\-\)\.]\s*", "", s).strip()
+
+def _normalize_items(raw_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+	cleaned: List[Dict[str, Any]] = []
+	for it in raw_items:
+		t = (it.get("type") or "").lower()
+		q = (it.get("question") or "").strip()
+		exp = (it.get("explanation") or "").strip()
+
+		if t == "mcq":
+			options = it.get("options") or []
+			options = [o for o in options if isinstance(o, str)]
+			options = [_strip_letter_prefix(o) for o in options]
+			# normalize answer -> index
+			ans = it.get("answer")
+			idx: int | None = None
+			if isinstance(ans, int):
+				idx = ans if 0 <= ans < len(options) else None
+			elif isinstance(ans, str):
+				a = ans.strip().lower()
+				if a in LETTER_TO_INDEX:
+					idx = LETTER_TO_INDEX[a]
+				else:
+					# try matching by text
+					try:
+						idx = next(i for i, o in enumerate(options) if o.lower() == ans.strip().lower())
+					except StopIteration:
+						idx = None
+			if not q or len(options) < 2 or idx is None:
+				continue  # drop malformed
+			cleaned.append({
+				"id": it.get("id") or f"q{len(cleaned)+1}",
+				"type": "mcq",
+				"question": q,
+				"options": options,
+				"answer": idx,                 # IMPORTANT: integer index
+				"explanation": exp or "Check the textbook passage.",
+			})
+
+		elif t == "fitb":
+			ans = it.get("answer")
+			if not q or not isinstance(ans, str):
+				continue
+			bad = ans.strip().lower() in {"string", "placeholder", "lorem"}
+			if bad:
+				continue
+			cleaned.append({
+				"id": it.get("id") or f"q{len(cleaned)+1}",
+				"type": "fitb",
+				"question": q,
+				"answer": ans.strip(),
+				"explanation": exp or "Use the word that best completes the sentence.",
+			})
+
+		else:
+			# drop other types for now
+			continue
+
+	# Optional: limit and shuffle
+	# import random; random.shuffle(cleaned)
+	return cleaned
 
 def _create_llm_client() -> Optional[Any]:
 	"""Create an LLM client if available and configured, otherwise return None."""
@@ -49,12 +100,9 @@ def _create_llm_client() -> Optional[Any]:
 		return None
 	try:
 		from .llm import LLMClient  # type: ignore
+		return LLMClient()
 	except Exception:
-		try:
-			from llm import LLMClient  # type: ignore
-		except Exception:
-			return None
-	return LLMClient()
+		return None
 
 
 app = FastAPI(title="English AI Tutor Backend", version="0.1.0")
@@ -133,8 +181,8 @@ def generate_quiz(payload: GenerateQuizPayload) -> BackendQuizResponse:
 	skills = payload.skills or ["grammar"]
 	query_text = payload.query or "PSAC Grade 6 English"
 	try:
-		passages = rag_search(query=query_text, k=6, unit=payload.unit, skills=skills)
-		print(f"[RAG] retrieved {len(passages)} passages for skills={skills} query={query_text!r}")
+		passages = rag_search(query=query_text, k=6, unit=payload.unit, skills=skills, seed=payload.seed)
+		print(f"[RAG] retrieved {len(passages)} passages for skills={skills} query={query_text!r} seed={payload.seed}")
 	except Exception as e:
 		print(f"[RAG] retrieval failed: {e}")
 		passages = []
@@ -147,18 +195,28 @@ def generate_quiz(payload: GenerateQuizPayload) -> BackendQuizResponse:
 
 	try:
 		# Build a strict prompt using only textbook context when available
+		SYSTEM_RULES = (
+			"Return STRICT JSON with an 'items' array.\n"
+			"Item rules:\n"
+			"- type: 'mcq' or 'fitb' only.\n"
+			"- For mcq: 'options' must be an array of plain strings (NO 'A:'/'B:' prefixes). "
+			"The 'answer' must be an INTEGER index (0-based) of the correct option.\n"
+			"- For fitb: omit 'options'. 'answer' must be the exact missing word/phrase (string), no placeholders.\n"
+			"- No placeholder values like 'string', 'lorem', etc.\n"
+            "Prefer asking about different subskills and word choices than in recent generations; avoid repeating very common items like 'opposite of happy'.\n"
+		)
 		messages = [
-			{
-				"role": "system",
-				"content": (
-					"You are a PSAC Grade 6 English quiz generator. "
-					"Return STRICT JSON with an 'items' array. "
-					"Use ONLY the provided textbook excerpts; "
-					"if insufficient, keep items simple and aligned with basic English outcomes."
-				),
-			},
-			{
-				"role": "user",
+				{
+					"role": "system",
+					"content": (
+						"You are a PSAC Grade 6 English quiz generator. "
+						+ SYSTEM_RULES
+						+ "Use ONLY the provided textbook excerpts; "
+						"if insufficient, keep items simple and aligned with basic English outcomes."
+					),
+				},
+				{
+					"role": "user",
 				"content": (
 					f"Make up to {payload.count or 3} items.\n"
 					f"Skills: {', '.join(skills)}\n"
@@ -199,17 +257,22 @@ def generate_quiz(payload: GenerateQuizPayload) -> BackendQuizResponse:
 				return _fallback_items(payload)
 
 		raw_items = data.get("items", []) if isinstance(data, dict) else []
-		parsed_items: List[QuizItem] = []
-		for entry in raw_items:
-			try:
-				parsed_items.append(QuizItem(**entry))
-			except Exception:
-				continue
-
-		if not parsed_items:
+		
+		# Normalize and clean the items
+		normalized_items = _normalize_items(raw_items)
+		
+		if not normalized_items:
 			return _fallback_items(payload)
-		source = "rag" if len(passages) > 0 else "fallback"
-		return BackendQuizResponse(items=parsed_items[: (payload.count or 3)], source=source)
+		
+		# Shuffle items before returning
+		import random
+		random.shuffle(normalized_items)
+		
+		source = "rag" if passages else "llm"
+		return BackendQuizResponse(
+			items=normalized_items[: (payload.count or 3)],
+			source=source
+		)
 
 	except Exception:
 		# Fall back silently so the UI remains usable during setup

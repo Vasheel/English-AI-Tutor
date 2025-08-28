@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, XCircle, Clock, Trophy, Brain } from 'lucide-react';
-import { generateQuiz as fetchQuiz, BackendQuizResponse } from '@/lib/api'; // <-- new: backend RAG API
+import { generateQuiz as fetchQuiz, BackendQuizResponse } from '@/lib/api';
 import { useQuizAttempts } from "@/hooks/useQuizAttempts";
 
 // ===============================
@@ -28,11 +28,10 @@ interface QuizGeneratorProps {
 }
 
 // ===============================
-// Local fallback generator (unchanged)
+// Local fallback generator
 // ===============================
 const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQuestion[] => {
   const baseQuestions: QuizQuestion[] = [
-    // --- (your existing fallback questions kept intact) ---
     {
       id: 'mcq-1',
       type: 'multiple-choice',
@@ -126,7 +125,7 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       question: 'Choose the correct preposition: "He is good ___ math."',
       options: ['at', 'in', 'on', 'with'],
       correctAnswer: 'at',
-      explanation: '“Good at” is the correct collocation.',
+      explanation: '"Good at" is the correct collocation.',
       difficulty: 'easy',
       category: 'grammar'
     },
@@ -193,7 +192,7 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       question: 'Which sentence demonstrates the subjunctive mood?',
       options: ['I wish I was rich.', 'I wish I were rich.', 'I am rich.', 'I will be rich.'],
       correctAnswer: 'I wish I were rich.',
-      explanation: 'Subjunctive “were” with wish/hypothetical.',
+      explanation: 'Subjunctive "were" with wish/hypothetical.',
       difficulty: 'hard',
       category: 'grammar'
     },
@@ -203,7 +202,7 @@ const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQ
       question: 'Identify the gerund in the sentence: "Swimming is my favorite sport."',
       options: ['Swimming', 'is', 'my', 'sport'],
       correctAnswer: 'Swimming',
-      explanation: '“Swimming” is used as a noun.',
+      explanation: '"Swimming" is used as a noun.',
       difficulty: 'hard',
       category: 'grammar'
     }
@@ -256,56 +255,96 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
           skills: ['vocabulary', 'grammar', 'reading'],
           count: QUESTIONS_PER_QUIZ,
           difficulty: 'PSAC-G6',
-          query: 'PSAC Grade 6 English'
+          query: 'PSAC Grade 6 English',
+          seed: Date.now() % 1_000_000   // 👈 this makes each call different
         });
-        console.log('Backend quiz:', backendQuiz);
+        console.log('Backend full response:', backendQuiz);
+        console.log("Backend quiz items:", backendQuiz.items);
+        console.log("Backend quiz source:", backendQuiz.source);
         
         // Use ONLY backend items when the call succeeds
+        // Server now returns normalized items with MCQ answers as integer indices
         const mapped = (backendQuiz.items || []).map((it, idx) => {
-          if (it.type === "mcq") {
-            return {
-              id: it.id || `backend-${idx}`,
-              type: "multiple-choice" as const,
-              question: String(it.question || ''),
-              options: Array.isArray(it.options) ? it.options : [],
-              correctAnswer: typeof it.answer === "number" && Array.isArray(it.options) 
-                ? it.options[it.answer] ?? "" 
-                : String(it.answer || ''),
-              explanation: String(it.explanation || ''),
-              difficulty: difficulty,
-              category: "grammar" as const,
-            };
-          } else if (it.type === "fitb") {
-            // For cloze questions, ensure proper formatting
-            const question = String(it.question || '');
-            const questionWithBlanks = question.includes('_____') ? question : `${question} _____`;
-            return {
-              id: it.id || `backend-${idx}`,
-              type: "cloze" as const,
-              question: questionWithBlanks,
-              correctAnswer: Array.isArray(it.answer) ? it.answer.join(',') : String(it.answer || ''),
-              explanation: String(it.explanation || ''),
-              difficulty: difficulty,
-              category: "grammar" as const,
-            };
-          } else {
-            // Default to multiple choice for unsupported types
-            return {
-              id: it.id || `backend-${idx}`,
-              type: "multiple-choice" as const,
-              question: String(it.question || ''),
-              options: Array.isArray(it.options) ? it.options : [],
-              correctAnswer: typeof it.answer === "number" && Array.isArray(it.options) 
-                ? it.options[it.answer] ?? "" 
-                : String(it.answer || ''),
-              explanation: String(it.explanation || ''),
-              difficulty: difficulty,
-              category: "grammar" as const,
-            };
+          console.log(`Mapping item ${idx}:`, it);
+          
+          // Handle both "mcq" and "fitb" types from backend
+          const questionType = it.type === "mcq" ? "multiple-choice" as const : "cloze" as const;
+          
+          // For MCQ questions, ensure we have valid options and answer
+          let correctAnswer = String(it.answer ?? "");
+          if (it.type === "mcq" && Array.isArray(it.options) && it.options.length > 0) {
+            if (typeof it.answer === "number" && it.answer >= 0 && it.answer < it.options.length) {
+              correctAnswer = it.options[it.answer];
+            } else if (typeof it.answer === "string") {
+              // If answer is a string, try to find it in options
+              const foundIndex = it.options.findIndex(opt => opt.toLowerCase() === it.answer.toLowerCase());
+              if (foundIndex >= 0) {
+                correctAnswer = it.options[foundIndex];
+              }
+            }
           }
+          
+          return {
+            id: it.id || `backend-${idx}`,
+            type: questionType,
+            question: String(it.question || ''),
+            options: Array.isArray(it.options) ? it.options : [],
+            correctAnswer: correctAnswer,
+            explanation: String(it.explanation ?? ""),
+            difficulty: difficulty,
+            category: "grammar" as const,
+          };
         });
+        
+        console.log("Mapped questions:", mapped);
 
-        setShuffledQuestions(mapped.slice(0, Math.min(QUESTIONS_PER_QUIZ, mapped.length)));
+        // ✅ NEW: if nothing came back, use fallback & show badge correctly
+        if (mapped.length === 0) {
+          setError('No items returned from backend — using fallback.');
+          const dyn = shuffleArray(generateDynamicQuestions(difficulty)).slice(0, QUESTIONS_PER_QUIZ);
+          setShuffledQuestions(dyn);
+          setBackendSource("fallback");
+          // reset session data and bail out
+          setCurrentQuestionIndex(0);
+          setSelectedAnswers([]);
+          setClozeAnswers(Array(QUESTIONS_PER_QUIZ).fill([]));
+          setShowResults(false);
+          setScore(0);
+          setStartTime(Date.now());
+          setSessionTime(0);
+          setFeedback('');
+          setShowExplanation(false);
+          return;
+        }
+        
+        // Additional validation: check if mapped questions have valid content
+        const validMapped = mapped.filter(q => 
+          q.question && q.question.trim() && 
+          (q.type === "multiple-choice" ? (q.options && q.options.length >= 2 && q.correctAnswer) : q.correctAnswer)
+        );
+        
+        if (validMapped.length === 0) {
+          console.warn("Backend returned items but none were valid after mapping");
+          setError('Backend items were invalid — using fallback.');
+          const dyn = shuffleArray(generateDynamicQuestions(difficulty)).slice(0, QUESTIONS_PER_QUIZ);
+          setShuffledQuestions(dyn);
+          setBackendSource("fallback");
+          // reset session data and bail out
+          setCurrentQuestionIndex(0);
+          setSelectedAnswers([]);
+          setClozeAnswers(Array(QUESTIONS_PER_QUIZ).fill([]));
+          setShowResults(false);
+          setScore(0);
+          setStartTime(Date.now());
+          setSessionTime(0);
+          setFeedback('');
+          setShowExplanation(false);
+          return;
+        }
+        
+        console.log("Valid mapped questions:", validMapped);
+
+        setShuffledQuestions(validMapped.slice(0, Math.min(QUESTIONS_PER_QUIZ, validMapped.length)));
         setBackendSource(backendQuiz.source ?? "rag");
 
         // Persist the generated quiz JSON once (backend success case)

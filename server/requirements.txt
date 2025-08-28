@@ -5,3 +5,6 @@ requests>=2.31
 supabase>=2.0.0
 openai>=1.30.0
 python-dotenv>=1.0.0
+PyPDF2>=3.0.0
+sentence-transformers>=2.0.0
+faiss-cpu>=1.7.0

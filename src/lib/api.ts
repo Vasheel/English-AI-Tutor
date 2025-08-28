@@ -10,6 +10,7 @@ type GenerateQuizPayload = {
     difficulty?: string;
     keywords?: string[];
     query?: string | null;
+    seed?: number;
   };
   
   type AttemptPayload = {
@@ -66,11 +67,14 @@ type GenerateQuizPayload = {
     const timeout = setTimeout(() => controller.abort(), 20000); // 20s
   
     try {
-      const res = await fetch(`${API_BASE}/api/quizzes/generate`, {
+      const url = `${API_BASE}/api/quizzes/generate`;
+      console.log("[quiz] calling:", url, "API_BASE=", API_BASE);
+      const res = await fetch(url, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
         signal: controller.signal,
+        cache: "no-store"
       });
       if (!res.ok) throw new Error((await res.text()) || "Quiz generation failed");
       return await res.json();
@@ -93,6 +97,7 @@ type GenerateQuizPayload = {
       method: 'POST',
       headers,
       body: JSON.stringify({ quiz }),
+      cache: "no-store"
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<{ id: string }>;
@@ -105,6 +110,7 @@ type GenerateQuizPayload = {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
+      cache: "no-store"
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -117,6 +123,7 @@ type GenerateQuizPayload = {
       method: 'POST',
       headers,
       body: JSON.stringify({ user_id, skill }),
+      cache: "no-store"
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<{ skill: string }>;

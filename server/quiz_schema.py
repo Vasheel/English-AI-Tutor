@@ -28,6 +28,7 @@ class GenerateQuizPayload(BaseModel):
     difficulty: Optional[str] = None
     keywords: Optional[List[str]] = None
     query: Optional[str] = None
+    seed: Optional[int] = None
 
 
 class SaveQuizRequest(BaseModel):
