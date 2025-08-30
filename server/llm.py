@@ -3,7 +3,7 @@
 LLM utilities. Thin wrapper around OpenAI-compatible APIs.
 Env:
   OPENAI_API_KEY   (required)
-  OPENAI_MODEL     (default: gpt-4o-mini)
+  MODEL_NAME       (default: gpt-4o-mini)
   OPENAI_BASE_URL  (default: https://api.openai.com/v1)
 """
 
@@ -48,7 +48,7 @@ class LLMClient:
         timeout_s: float = 30.0,
         max_retries: int = 2,
     ):
-        self.model: str = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # <- you said you use OPENAI_MODEL
+        self.model: str = model or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.base_url: str = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.api_key: str = api_key or os.getenv("OPENAI_API_KEY", "")
         self.timeout_s: float = timeout_s

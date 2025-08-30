@@ -22,11 +22,16 @@ class BackendQuizResponse(BaseModel):
 
 
 class GenerateQuizPayload(BaseModel):
-    unit: Optional[int] = None
-    skills: List[str]
-    count: Optional[int] = 3
-    difficulty: Optional[str] = None
-    keywords: Optional[List[str]] = None
+    # --- legacy fields (keep working with old frontend) ---
+    topic: Optional[str] = None
+    grade: str = "Grade 6"
+    num_questions: Optional[int] = None
+
+    # --- new flexible fields (what you started sending) ---
+    count: Optional[int] = None
+    skills: List[str] = Field(default_factory=lambda: ["grammar"])
+    unit: Optional[str] = None
+    keywords: List[str] = Field(default_factory=list)
     query: Optional[str] = None
     seed: Optional[int] = None
 

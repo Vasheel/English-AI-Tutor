@@ -3,9 +3,17 @@
 // If you use Supabase Auth on the frontend, you can pass the user's JWT to the backend.
 // Your backend can then read Authorization: Bearer <token> if you want to link attempts to auth.uid().
 
+const API = import.meta.env.VITE_API_BASE ?? ""; // Use proxy in dev, env var in prod
+
 type GenerateQuizPayload = {
+    // Legacy shape support
+    topic?: string;
+    grade?: string;
+    num_questions?: number;
+    
+    // New shape
     unit?: number | null;
-    skills: string[];
+    skills?: string[];
     count?: number;
     difficulty?: string;
     keywords?: string[];
@@ -55,45 +63,57 @@ type GenerateQuizPayload = {
     }
   }
   
-  export async function generateQuiz(payload: GenerateQuizPayload) {
-    // If VITE_API_BASE is set, use it; otherwise rely on Vite proxy with a relative path.
-    const rawBase = import.meta.env.VITE_API_BASE;
-    const API_BASE = rawBase ? rawBase.replace(/\/+$/, "") : ""; // strip trailing '/'
-  
-    const headers = { "Content-Type": "application/json", ...(await withAuthHeaders()) };
-  
-    // Optional: timeout so UI doesn't hang forever
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000); // 20s
-  
-    try {
-      const url = `${API_BASE}/api/quizzes/generate`;
-      console.log("[quiz] calling:", url, "API_BASE=", API_BASE);
-      const res = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-        cache: "no-store"
-      });
-      if (!res.ok) throw new Error((await res.text()) || "Quiz generation failed");
-      return await res.json();
-    } catch (err: unknown) {
-      // Surface useful error (timeout/abort or network)
-      if (err instanceof Error && err.name === "AbortError") {
-        throw new Error("Request timed out. Please try again.");
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeout);
+  // Fixed generateQuiz function in api.ts - replace the existing function
+
+export async function generateQuiz(payload: GenerateQuizPayload = { topic: "tenses", grade: "Grade 6", num_questions: 6 }) {
+  const headers = { "Content-Type": "application/json", ...(await withAuthHeaders()) };
+
+  // Increased timeout for AI generation - it can take longer
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000); // 60s instead of 20s
+
+  try {
+    const url = `${API}/api/quizzes/generate`;
+    console.log("[quiz] calling:", url);
+    console.log("[quiz] payload:", payload);
+    
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+      cache: "no-store"
+    });
+    
+    console.log("[quiz] response status:", res.status);
+    console.log("[quiz] response ok:", res.ok);
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("[quiz] error response:", errorText);
+      throw new Error(errorText || "Quiz generation failed");
     }
+    
+    const data = await res.json();
+    console.log("[quiz] success response:", data);
+    return data;
+    
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.error("[quiz] request timed out after 60s");
+      throw new Error("Request timed out after 60 seconds. The AI is taking longer than usual.");
+    }
+    console.error("[quiz] request failed:", err);
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
+}
   
   
   export async function saveQuiz(quiz: Record<string, unknown>) {
-    const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
     const headers = { 'Content-Type': 'application/json', ...(await withAuthHeaders()) };
-    const res = await fetch(`${API_BASE}/api/quizzes/save`, {
+    const res = await fetch(`${API}/api/quizzes/save`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ quiz }),
@@ -104,9 +124,8 @@ type GenerateQuizPayload = {
   }
   
   export async function logAttempt(payload: AttemptPayload) {
-    const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
     const headers = { 'Content-Type': 'application/json', ...(await withAuthHeaders()) };
-    const res = await fetch(`${API_BASE}/api/attempts`, {
+    const res = await fetch(`${API}/api/attempts`, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -117,9 +136,8 @@ type GenerateQuizPayload = {
   }
   
   export async function getNextDifficulty(user_id: string, skill: string) {
-    const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
     const headers = { 'Content-Type': 'application/json', ...(await withAuthHeaders()) };
-    const res = await fetch(`${API_BASE}/api/next-difficulty`, {
+    const res = await fetch(`${API}/api/next-difficulty`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ user_id, skill }),

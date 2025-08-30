@@ -13,7 +13,7 @@ if not api_key:
     )
 
 client = OpenAI(api_key=api_key)
-model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+model = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 resp = client.chat.completions.create(
     model=model,

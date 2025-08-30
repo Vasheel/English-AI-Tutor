@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,          // fine (just remember to visit http://localhost:8080)
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000", // ← prefer 127.0.0.1 to avoid IPv6 localhost quirks
+        target: "http://127.0.0.1:8010", // ← prefer 127.0.0.1 to avoid IPv6 localhost quirks
         changeOrigin: true,
         secure: false,                   // harmless for http, avoids SSL checks if you ever use https locally
         // ws: true,                     // only if you later use websockets
