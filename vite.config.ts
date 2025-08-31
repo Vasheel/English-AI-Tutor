@@ -6,14 +6,25 @@ import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",          // ok (binds IPv6 + IPv4); you can also use '127.0.0.1'
-    port: 8080,          // fine (just remember to visit http://localhost:8080)
+    host: "::",
+    port: 8080,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8010", // ← prefer 127.0.0.1 to avoid IPv6 localhost quirks
+        target: "http://127.0.0.1:8010",
         changeOrigin: true,
-        secure: false,                   // harmless for http, avoids SSL checks if you ever use https locally
-        // ws: true,                     // only if you later use websockets
+        secure: false,
+        rewrite: (path) => path, // Keep the /api prefix
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
       },
     },
   },
