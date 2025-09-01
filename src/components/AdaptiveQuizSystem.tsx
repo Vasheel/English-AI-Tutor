@@ -37,13 +37,12 @@ interface QuestionHistory {
 // Random topic and skill combinations for variety
 const QUIZ_VARIATIONS = [
   { skills: ['grammar'], keywords: ['tenses', 'verbs', 'past', 'present', 'future'] },
-  { skills: ['vocabulary'], keywords: ['synonyms', 'antonyms', 'meanings', 'context'] },
-  { skills: ['comprehension'], keywords: ['main idea', 'inference', 'details'] },
+  { skills: ['vocabulary'], keywords: ['synonyms', 'antonyms', 'meanings', 'definitions'] },
   { skills: ['grammar', 'vocabulary'], keywords: ['sentence structure', 'word choice'] },
   { skills: ['writing'], keywords: ['punctuation', 'capitalization', 'spelling'] },
-  { skills: ['reading', 'comprehension'], keywords: ['passages', 'understanding'] },
   { skills: ['grammar'], keywords: ['pronouns', 'adjectives', 'adverbs', 'nouns'] },
-  { skills: ['vocabulary'], keywords: ['prefixes', 'suffixes', 'word roots'] },
+  { skills: ['vocabulary'], keywords: ['prefixes', 'suffixes', 'word roots', 'word forms'] },
+  // Removed comprehension-based variations
 ];
 
 // Progressive difficulty multipliers
@@ -164,11 +163,17 @@ const generateRandomQuiz = async () => {
         3: 'hard'
       };
       
-      // Create difficulty-specific prompts
+      // Create difficulty-specific prompts that explicitly exclude passage-based questions
       const difficultyPrompts = {
-        1: `Generate very simple and basic Grade 6 English questions. Use common words and simple sentence structures. Focus on fundamental concepts.`,
-        2: `Generate intermediate Grade 6 English questions with moderate complexity. Include some challenging vocabulary and grammar concepts.`,
-        3: `Generate advanced Grade 6 English questions. Use complex sentence structures, advanced vocabulary, and require critical thinking.`
+        1: `Generate very simple Grade 6 English questions. Use common words and simple sentence structures. 
+            DO NOT create reading comprehension questions or reference any passages.
+            Focus on: vocabulary meanings, basic grammar, word usage, spelling.`,
+        2: `Generate intermediate Grade 6 English questions with moderate complexity. 
+            DO NOT create reading comprehension questions or reference any passages.
+            Focus on: synonyms/antonyms, grammar rules, sentence structure, word forms.`,
+        3: `Generate advanced Grade 6 English questions requiring critical thinking. 
+            DO NOT create reading comprehension questions or reference any passages.
+            Focus on: complex grammar, advanced vocabulary, word relationships, language analysis.`
       };
       
       // Add progressive difficulty within the level
@@ -182,12 +187,12 @@ const generateRandomQuiz = async () => {
       
       // Generate quiz with proper difficulty parameters
       const quizData = await generateQuiz({
-        skills: variation.skills,
+        skills: variation.skills.filter(skill => skill !== 'comprehension'), // Remove comprehension
         keywords: variation.keywords,
         difficulty: difficultyMap[currentDifficulty], // Send correct difficulty string
         count: 5,
         grade: 'Grade 6',
-        query: enhancedPrompt, // Use enhanced prompt with progressive difficulty
+        query: enhancedPrompt + ` Generate standalone questions that don't require any external text or passage.`, // Use enhanced prompt with progressive difficulty
         topic: `${variation.skills.join(' and ')} - Level ${currentDifficulty}`, // Include level in topic
         seed: Date.now() % 1000000
       });

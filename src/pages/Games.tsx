@@ -5,6 +5,7 @@ import SentenceBuilder from "@/components/games/SentenceBuilder";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Gamepad2, Puzzle, Building, Trophy } from "lucide-react";
+import { TestWordGeneration } from "@/components/test/TestWordGeneration";
 
 const Games = () => {
   return (
@@ -19,6 +20,11 @@ const Games = () => {
           <p className="text-gray-600 mb-4">
             Learn English through fun and interactive games!
           </p>
+        </div>
+
+        {/* Temporary Test Component */}
+        <div className="mb-8">
+          <TestWordGeneration />
         </div>
 
         <Tabs defaultValue="word-scramble" className="max-w-4xl mx-auto">
