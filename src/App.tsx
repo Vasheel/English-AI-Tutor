@@ -21,6 +21,7 @@ import { ProgressProvider } from "./components/games/ProgressContext";
 import ExerciseGenerator from "@/components/ExerciseGenerator";
 import AdaptiveDifficultyDashboard from "@/components/AdaptiveDifficultyDashboard";
 import AIQuestionDemo from "@/components/AIQuestionDemo";
+import AdaptiveQuizSystem from "@/components/AdaptiveQuizSystem";
 
 const queryClient = new QueryClient();
 
@@ -101,6 +102,11 @@ const App = () => (
                   />
                 </ProtectedRoute>
               } />
+              <Route path="/adaptive-quiz" element={
+  <ProtectedRoute>
+    <AdaptiveQuizSystem />
+  </ProtectedRoute>
+} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <VoiceControls 

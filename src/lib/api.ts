@@ -70,7 +70,7 @@ export async function generateQuiz(payload: GenerateQuizPayload = { topic: "tens
 
   // Increased timeout for AI generation - it can take longer
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000); // 60s instead of 20s
+  const timeout = setTimeout(() => controller.abort(), 180000); // 180s instead of 60s
 
   try {
     const url = `${API}/api/quizzes/generate`;
