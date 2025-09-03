@@ -39,11 +39,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routes import debug, health, models, quizzes
+from .routes import debug, health, models, quizzes, images, grammar
 app.include_router(debug.router)
 app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(quizzes.router)
+app.include_router(images.router)
+app.include_router(grammar.router)
 
 @app.get("/")
 def root():
