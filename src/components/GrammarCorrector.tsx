@@ -1,19 +1,10 @@
 
-import { useState, useEffect } from "react";
-import { Loader, RefreshCw, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { useState } from "react";
+import { Loader, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 
-interface Image {
-  id: string;
-  path: string;
-  level: string;
-  title: string;
-  alt: string;
-  objects: string[];
-  actions: string[];
-  locations: string[];
-}
+
 
 interface GrammarResponse {
   corrected: string;
@@ -32,9 +23,6 @@ interface GrammarResponse {
     WordChoice: number;
   };
   confidence: string;
-  context_score: number;
-  context_passed: boolean;
-  grammar_score: number;
 }
 
 const GrammarCorrector = () => {
@@ -42,14 +30,10 @@ const GrammarCorrector = () => {
   const [corrected, setCorrected] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [imageMode, setImageMode] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState<"easy" | "medium" | "hard">("easy");
-  const [images, setImages] = useState<Image[]>([]);
-  const [selectedImage, setSelectedImage] = useState<Image | null>(null);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+
   const [grammarResult, setGrammarResult] = useState<GrammarResponse | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const [isRetryMode, setIsRetryMode] = useState(false);
+
   const [corrections, setCorrections] = useState<Array<{
     original: string;
     corrected: string;
@@ -66,168 +50,10 @@ const GrammarCorrector = () => {
     onError: (e) => console.error("Speech Error:", e),
   });
 
-  // Load images when image mode is enabled
-  useEffect(() => {
-    if (imageMode) {
-      loadImages();
-    }
-  }, [imageMode, selectedLevel]);
 
-  const loadImages = async () => {
-    try {
-      const response = await fetch(`/api/images/list?level=${selectedLevel}`);
-      if (response.ok) {
-        const imageData = await response.json();
-        setImages(imageData);
-        if (imageData.length > 0) {
-          setSelectedImage(imageData[0]);
-          setCurrentImageIndex(0);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load images:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load images. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const goToNextImage = () => {
-    if (images.length === 0) return;
-    
-    const nextIndex = (currentImageIndex + 1) % images.length;
-    setCurrentImageIndex(nextIndex);
-    setSelectedImage(images[nextIndex]);
-    
-    // Clear previous results when changing images
-    setGrammarResult(null);
-    setCorrected("");
-    setCorrections([]);
-    resetRetryState(); // Reset retry state when moving to next image
-  };
-
-  const skipImage = () => {
-    if (images.length === 0) return;
-    
-    // Skip to next image (same as next for now, but could be enhanced later)
-    goToNextImage();
-    
-    toast({
-      title: "Image skipped",
-      description: "Moving to the next image. No penalty applied.",
-    });
-  };
-
-  const handleRetry = () => {
-    if (retryCount >= 2) {
-      toast({
-        title: "Maximum retries reached",
-        description: "Let's move to the next image and try again!",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsRetryMode(true);
-    setRetryCount(prev => prev + 1);
-    
-    toast({
-      title: "Retry mode activated",
-      description: `Attempt ${retryCount + 2} of 3. Use the hint to improve your answer!`,
-    });
-  };
-
-  const resetRetryState = () => {
-    setRetryCount(0);
-    setIsRetryMode(false);
-  };
-
-  const handleCheck = (spokenText: string) => {
+    const handleCheck = (spokenText: string) => {
     setInput(spokenText);
-    if (imageMode && selectedImage) {
-      evaluateGrammarWithImage(spokenText);
-    } else {
-      correctGrammar();
-    }
-  };
-
-  const evaluateGrammarWithImage = async (text: string) => {
-    if (!text.trim() || !selectedImage) {
-      toast({
-        title: "Please enter some text",
-        description: "Type a sentence to check for grammar corrections.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    
-    // Store previous result for comparison if in retry mode
-    const previousResult = grammarResult;
-    setGrammarResult(null);
-
-    try {
-      const response = await fetch("/api/grammar/evaluate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: text,
-          image_id: selectedImage.id,
-          mode: "minimal",
-          dialect: "en-GB",
-          grade_level: 6
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result: GrammarResponse = await response.json();
-      setGrammarResult(result);
-      setCorrected(result.corrected);
-      
-      // Handle retry success
-      if (isRetryMode && result.context_passed && result.score > (previousResult?.score || 0)) {
-        toast({
-          title: "Nice fix! 🎉",
-          description: `Great improvement! Your score went from ${previousResult?.score || 0} to ${result.score}`,
-        });
-        setIsRetryMode(false); // Exit retry mode on success
-      } else if (isRetryMode) {
-        // Show progress even if still failing
-        const grammarProgress = previousResult ? result.grammar_score - previousResult.grammar_score : 0;
-        const contextProgress = previousResult ? result.context_score - previousResult.context_score : 0;
-        
-        if (grammarProgress > 0 || contextProgress > 0) {
-          toast({
-            title: "Progress made! 📈",
-            description: `Grammar: ${grammarProgress > 0 ? '+' : ''}${grammarProgress}, Context: ${contextProgress > 0 ? '+' : ''}${contextProgress}`,
-          });
-        }
-      } else {
-        toast({
-          title: "Grammar evaluation complete!",
-          description: `Score: ${result.score}/100`,
-        });
-      }
-    } catch (err) {
-      console.error("Grammar evaluation error:", err);
-      setError("Failed to evaluate grammar. Please try again.");
-      toast({
-        title: "Error",
-        description: "Failed to evaluate grammar. Please try again.",
-        variant: "destructive"
-      });
-    }
-
-    setLoading(false);
+    correctGrammar();
   };
 
   const correctGrammar = async (retryCount = 0) => {
@@ -399,181 +225,23 @@ const GrammarCorrector = () => {
           {loading && <Loader className="animate-spin h-4 w-4 text-purple-500" />}
         </h3>
         
-        {/* Image Mode Toggle */}
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={imageMode}
-              onChange={(e) => setImageMode(e.target.checked)}
-              className="w-4 h-4 text-purple-600"
-            />
-            <span className="flex items-center gap-1">
-              <ImageIcon className="h-4 w-4" />
-              Image Mode
-            </span>
-          </label>
-          
-          {imageMode && (
-            <select
-              value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value as "easy" | "medium" | "hard")}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          )}
-        </div>
+
       </div>
 
       <p className="text-sm text-gray-500 mb-4">
-        {imageMode 
-          ? "Describe what you see in the image and I'll help you write it correctly!"
-          : "Type a sentence and I'll help you make it perfect! Press Ctrl+Enter to check quickly."
-        }
+        Type a sentence and I'll help you make it perfect! Press Ctrl+Enter to check quickly.
       </p>
 
-             {/* Context Validation Warning */}
-       {imageMode && grammarResult && !grammarResult.context_passed && (
-         <div className="mb-4 p-3 bg-orange-100 border border-orange-300 rounded-lg">
-           <div className="flex items-center gap-2">
-             <span className="text-xl">⚠️</span>
-             <div className="flex-1">
-               <p className="text-sm font-medium text-orange-800">
-                 Your sentence doesn't seem to match the image very well.
-               </p>
-               <p className="text-xs text-orange-700">
-                 Try describing what you actually see in the picture, not something else.
-               </p>
-               
-               {/* Retry Hint - show only one hint */}
-               {isRetryMode && grammarResult.explanations.length > 0 && (
-                 <div className="mt-2 p-2 bg-orange-200 border border-orange-400 rounded">
-                   <p className="text-xs font-medium text-orange-800">💡 Hint:</p>
-                   <p className="text-xs text-orange-700">{grammarResult.explanations[0]}</p>
-                 </div>
-               )}
-               
-               {/* Retry Counter */}
-               <div className="mt-2 text-xs text-orange-600">
-                 Attempts: {retryCount + 1}/3
-               </div>
-               
-               {/* Max Retries Reached */}
-               {retryCount >= 2 && (
-                 <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded">
-                   <p className="text-xs font-medium text-red-800">Maximum retries reached</p>
-                   <p className="text-xs text-red-700">Try the next image to continue learning!</p>
-                 </div>
-               )}
-             </div>
-           </div>
-         </div>
-       )}
 
-      {/* Image Display */}
-      {imageMode && selectedImage && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-start gap-4">
-            <img
-              src={selectedImage.path}
-              alt={selectedImage.alt}
-              className="w-32 h-32 object-cover rounded-lg border-2 border-gray-200"
-            />
-            <div className="flex-1">
-              <h4 className="font-medium text-gray-800 mb-2">{selectedImage.title}</h4>
-              <p className="text-sm text-gray-600 mb-3">{selectedImage.alt}</p>
-              
-              {/* Enhanced metadata display */}
-              <div className="space-y-2 mb-3">
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-xs font-medium text-gray-500">Objects:</span>
-                  {selectedImage.objects.map((obj, index) => (
-                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                      {obj}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-xs font-medium text-gray-500">Actions:</span>
-                  {selectedImage.actions.map((action, index) => (
-                    <span key={index} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                      {action}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-xs font-medium text-gray-500">Locations:</span>
-                  {selectedImage.locations.map((location, index) => (
-                    <span key={index} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                      {location}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              
-              <p className="text-sm text-gray-600 mb-3">
-                Write a sentence describing what you see in this image. 
-                Try to use descriptive language and proper grammar!
-              </p>
-              
-              {/* Writing suggestions based on metadata */}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs font-medium text-blue-800 mb-2">💡 Writing Tips:</p>
-                <div className="text-xs text-blue-700 space-y-1">
-                  <p>• Try to include some of the objects: <span className="font-medium">{selectedImage.objects.slice(0, 3).join(", ")}</span></p>
-                  <p>• Describe what's happening: <span className="font-medium">{selectedImage.actions.slice(0, 2).join(" and ")}</span></p>
-                  <p>• Mention the location: <span className="font-medium">{selectedImage.locations[0]}</span></p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Image Navigation */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">
-                Image {currentImageIndex + 1} of {images.length}
-              </span>
-              <span className="text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded-full">
-                Level: {selectedLevel.charAt(0).toUpperCase() + selectedLevel.slice(1)}
-              </span>
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={skipImage}
-                className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                title="Skip this image (no penalty)"
-              >
-                ⏭️ Skip
-              </button>
-              <button
-                onClick={goToNextImage}
-                className="px-4 py-2 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
-                title={currentImageIndex === images.length - 1 ? "Go to first image (wrapping around)" : "Go to next image"}
-              >
-                ➡️ Next
-                {currentImageIndex === images.length - 1 && (
-                  <span className="ml-1 text-xs opacity-70">↻</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+
 
       <div className="flex items-start gap-2 mb-4">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={imageMode 
-            ? "Describe what you see in the image..."
-            : "She don't has no pencil..."
-          }
+          placeholder="She don't has no pencil..."
           className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
         />
         <button
@@ -589,34 +257,24 @@ const GrammarCorrector = () => {
 
       <div className="flex gap-3">
         <button
-          onClick={() => imageMode && selectedImage ? evaluateGrammarWithImage(input) : correctGrammar()}
+          onClick={() => correctGrammar()}
           className="bg-purple-400 text-white px-6 py-2 rounded-lg hover:bg-purple-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           disabled={loading}
         >
           {loading ? (
             <>
               <Loader className="animate-spin h-4 w-4" />
-              {imageMode ? "Evaluating..." : "Checking..."}
+              Checking...
             </>
           ) : (
             <>
               <CheckCircle className="h-4 w-4" />
-              {imageMode ? "Evaluate My Writing" : "Check My Grammar"}
+              Check My Grammar
             </>
           )}
         </button>
         
-        {/* Retry Button - only show when context fails or score is very low */}
-        {imageMode && grammarResult && !grammarResult.context_passed && retryCount < 2 && (
-          <button
-            onClick={handleRetry}
-            className="bg-orange-400 text-white px-6 py-2 rounded-lg hover:bg-orange-500 transition-all duration-200 flex items-center gap-2"
-            disabled={loading}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Retry ({3 - retryCount} left)
-          </button>
-        )}
+
       </div>
 
       {/* Grammar Results */}
@@ -638,55 +296,7 @@ const GrammarCorrector = () => {
             {renderDiff(grammarResult.diff)}
           </div>
 
-                     {/* Context Validation Results */}
-           <div className={`p-4 border rounded-lg ${
-             grammarResult.context_passed 
-               ? "bg-green-50 border-green-300" 
-               : "bg-orange-50 border-orange-300"
-           }`}>
-             <div className="flex items-center gap-2 mb-3">
-               <span className="text-2xl">🎯</span>
-               <strong className={grammarResult.context_passed ? "text-green-800" : "text-orange-800"}>
-                 Context Validation: {grammarResult.context_passed ? "Passed" : "Needs Improvement"}
-               </strong>
-               {isRetryMode && (
-                 <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                   Retry #{retryCount}
-                 </span>
-               )}
-             </div>
-             <div className="space-y-3">
-               <div className="flex items-center gap-3">
-                 <span className="text-2xl font-bold text-purple-600">
-                   {grammarResult.context_score}/100
-                 </span>
-                 <span className="text-sm text-gray-600">
-                   Context Score
-                 </span>
-               </div>
-               
-               {/* Show only one hint during retry mode */}
-               {isRetryMode && grammarResult.explanations.length > 0 ? (
-                 <div>
-                   <p className="text-sm font-medium text-gray-700 mb-2">💡 Focus on this:</p>
-                   <div className="bg-white p-2 rounded border-l-4 border-blue-400">
-                     <p className="text-sm text-gray-700">{grammarResult.explanations[0]}</p>
-                   </div>
-                 </div>
-               ) : grammarResult.explanations.length > 0 ? (
-                 <div>
-                   <p className="text-sm font-medium text-gray-700 mb-2">💡 Suggestions:</p>
-                   <div className="space-y-2">
-                     {grammarResult.explanations.map((hint, index) => (
-                       <div key={index} className="bg-white p-2 rounded border-l-4 border-orange-400">
-                         <p className="text-sm text-gray-700">{hint}</p>
-                       </div>
-                     ))}
-                   </div>
-                 </div>
-               ) : null}
-             </div>
-           </div>
+
 
           <div className="p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
             <div className="flex items-center gap-2 mb-3">
@@ -703,16 +313,10 @@ const GrammarCorrector = () => {
                 </span>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-white rounded-lg border">
-                  <div className="text-lg font-bold text-blue-600">{grammarResult.grammar_score}</div>
+                              <div className="text-center p-3 bg-white rounded-lg border">
+                  <div className="text-lg font-bold text-blue-600">{grammarResult.score}</div>
                   <div className="text-xs text-gray-600">Grammar</div>
                 </div>
-                <div className="text-center p-3 bg-white rounded-lg border">
-                  <div className="text-lg font-bold text-green-600">{grammarResult.context_score}</div>
-                  <div className="text-xs text-gray-600">Context</div>
-                </div>
-              </div>
               
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Error Categories:</p>

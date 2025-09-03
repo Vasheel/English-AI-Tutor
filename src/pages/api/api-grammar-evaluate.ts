@@ -146,20 +146,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const grammarScore = scoreChanges(diff);
     // Evaluate context based on image id
     const { contextScore, passed, missing } = evaluateContext(text, req.body.image_id);
-    // Combine grammar and context scores (70% grammar, 30% context)
-    const finalScore = Math.round(grammarScore * 0.7 + contextScore * 0.3);
-    // Tags placeholder: in a real implementation, this would be more detailed
-    const tags = { SVA: 0, Article: 0, Spelling: 0, Punctuation: 0, Tense: 0, WordChoice: 0 };
-    const explanations: Explanation[] = [];
+    
+    // Extract level from image id for feedback
+    let level = 'easy';
+    if (req.body.image_id) {
+      level = req.body.image_id.split('-')[0] as 'easy' | 'medium' | 'hard';
+    }
+    
+    // Define required objects based on level
+    const requiredObjects: Record<'easy' | 'medium' | 'hard', number> = {
+      easy: 1,
+      medium: 2,
+      hard: 3,
+    };
+    
     return res.status(200).json({
       corrected,
       diff,
-      grammarScore,
-      contextScore,
-      finalScore,
-      tags,
-      context: { passed, missing },
-      explanations,
+      grammar_score: grammarScore,
+      context_score: contextScore,
+      context_passed: passed,
+      missing_objects: missing,
+      feedback: missing.length > 0 ? `Try to include at least ${requiredObjects[level]} object(s) from the image.` : "Great job describing the image!",
       confidence: 'medium',
     });
   } catch (error: unknown) {

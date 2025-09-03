@@ -22,6 +22,7 @@ import ExerciseGenerator from "@/components/ExerciseGenerator";
 import AdaptiveDifficultyDashboard from "@/components/AdaptiveDifficultyDashboard";
 import AIQuestionDemo from "@/components/AIQuestionDemo";
 import AdaptiveQuizSystem from "@/components/AdaptiveQuizSystem";
+import ImageQuiz from "@/pages/ImageQuiz";
 
 const queryClient = new QueryClient();
 
@@ -103,10 +104,16 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/adaptive-quiz" element={
-  <ProtectedRoute>
-    <AdaptiveQuizSystem />
-  </ProtectedRoute>
-} />
+                <ProtectedRoute>
+                  <AdaptiveQuizSystem />
+                </ProtectedRoute>
+              } />
+              <Route path="/image-quiz" element={
+                <ProtectedRoute>
+                  <ImageQuiz />
+                </ProtectedRoute>
+              } />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
             <VoiceControls 
