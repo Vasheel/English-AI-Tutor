@@ -19,10 +19,10 @@ import VoiceControls from "@/components/VoiceControls";
 import ChatBot from "@/components/ChatBot";
 import { ProgressProvider } from "./components/games/ProgressContext";
 import ExerciseGenerator from "@/components/ExerciseGenerator";
-import AdaptiveDifficultyDashboard from "@/components/AdaptiveDifficultyDashboard";
 import AIQuestionDemo from "@/components/AIQuestionDemo";
 import AdaptiveQuizSystem from "@/components/AdaptiveQuizSystem";
 import ImageQuiz from "@/pages/ImageQuiz";
+import DiagnosticPage from './pages/DiagnosticPage';
 
 const queryClient = new QueryClient();
 
@@ -85,11 +85,7 @@ const App = () => (
                   <ExerciseGenerator />
                 </ProtectedRoute>
               } />
-              <Route path="/adaptive-dashboard" element={
-                <ProtectedRoute>
-                  <AdaptiveDifficultyDashboard />
-                </ProtectedRoute>
-              } />
+              
               <Route path="/ai-demo" element={
                 <ProtectedRoute>
                   <AIQuestionDemo />
@@ -113,6 +109,8 @@ const App = () => (
                   <ImageQuiz />
                 </ProtectedRoute>
               } />
+              <Route path="/diagnostic" element={<DiagnosticPage />} />
+                         
 
               <Route path="*" element={<NotFound />} />
             </Routes>

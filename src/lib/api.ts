@@ -65,24 +65,52 @@ type GenerateQuizPayload = {
   
   // Fixed generateQuiz function in api.ts - replace the existing function
 
-export async function generateQuiz(payload: GenerateQuizPayload = { topic: "tenses", grade: "Grade 6", num_questions: 6 }) {
-  const headers = { "Content-Type": "application/json", ...(await withAuthHeaders()) };
+// src/lib/api.ts - Update your generateQuiz function
 
-  // Increased timeout for AI generation - it can take longer
+export async function generateQuiz(payload: GenerateQuizPayload = { 
+  topic: "tenses", 
+  grade: "Grade 6", 
+  num_questions: 6 
+}) {
+  const headers = { 
+    "Content-Type": "application/json",
+    // Prevent browser caching
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    ...(await withAuthHeaders()) 
+  };
+
+  // Add timestamp and session ID to ensure uniqueness
+  const enhancedPayload = {
+    ...payload,
+    // Add timestamp to make each request unique
+    timestamp: Date.now(),
+    // Add a random session ID for this quiz
+    session_id: `quiz_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    // Add a random seed if not provided
+    seed: payload.seed || Math.floor(Math.random() * 1000000)
+  };
+
+  // Increased timeout for AI generation
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180000); // 180s instead of 60s
+  const timeout = setTimeout(() => controller.abort(), 180000); // 180s timeout
 
   try {
     const url = `${API}/api/quizzes/generate`;
     console.log("[quiz] calling:", url);
-    console.log("[quiz] payload:", payload);
+    console.log("[quiz] enhanced payload:", enhancedPayload);
     
     const res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(enhancedPayload),
       signal: controller.signal,
-      cache: "no-store"
+      // Critical: Prevent browser from caching this request
+      cache: "no-store",
+      // Ensure fresh request
+      mode: "cors",
+      credentials: "same-origin"
     });
     
     console.log("[quiz] response status:", res.status);
@@ -96,6 +124,22 @@ export async function generateQuiz(payload: GenerateQuizPayload = { topic: "tens
     
     const data = await res.json();
     console.log("[quiz] success response:", data);
+    
+    // Verify we got unique questions
+    if (data.items && data.items.length > 0) {
+      const firstQuestion = data.items[0].question;
+      console.log("[quiz] First question preview:", firstQuestion.substring(0, 50) + "...");
+      
+      // Store last question to detect repetition (optional debugging)
+      if (window.localStorage) {
+        const lastQuestion = window.localStorage.getItem('last_quiz_question');
+        if (lastQuestion === firstQuestion) {
+          console.warn("[quiz] WARNING: Same first question as last time!");
+        }
+        window.localStorage.setItem('last_quiz_question', firstQuestion);
+      }
+    }
+    
     return data;
     
   } catch (err: unknown) {
@@ -145,4 +189,17 @@ export async function generateQuiz(payload: GenerateQuizPayload = { topic: "tens
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<{ skill: string }>;
+  }
+
+  // Simple chat proxy to backend to avoid exposing API keys in the browser
+  export async function chat(messages: Array<{ role: string; content: string }>, opts?: { model?: string; temperature?: number; max_tokens?: number }) {
+    const headers = { 'Content-Type': 'application/json', ...(await withAuthHeaders()) };
+    const res = await fetch(`${API}/api/chat`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ messages, ...opts }),
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ reply: string }>;
   }

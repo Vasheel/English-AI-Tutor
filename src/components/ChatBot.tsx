@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { chat as chatApi } from '@/lib/api';
 import VoiceControls from './VoiceControls';
 import { Button } from "./ui/button";
 import { Loader2 } from "lucide-react";
@@ -40,34 +41,16 @@ const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are an English le
     setError(null);
 
     try {
-      // Prepare messages for OpenAI
+      // Prepare messages for backend chat
       const messagesForAPI = [
         { role: 'system', content: systemPrompt },
         ...context.map(msg => ({ role: 'user', content: msg })),
         { role: 'user', content: text }
       ];
 
-      // Make API call
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model,
-          messages: messagesForAPI,
-          temperature: 0.7,
-          max_tokens: 256
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response from AI');
-      }
-
-      const data = await response.json();
-      const botResponse = data.choices[0].message.content.trim();
+      // Make API call to backend (proxy to OpenAI)
+      const data = await chatApi(messagesForAPI, { model, temperature: 0.7, max_tokens: 256 });
+      const botResponse = data.reply.trim();
 
       // Add bot message
       setMessages(prev => [...prev, {

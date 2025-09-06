@@ -27,202 +27,8 @@ interface QuizGeneratorProps {
   onProgress: (score: number, sessionTime?: number) => void;
 }
 
-// ===============================
-// Local fallback generator
-// ===============================
-const generateDynamicQuestions = (difficulty: 'easy' | 'medium' | 'hard'): QuizQuestion[] => {
-  const baseQuestions: QuizQuestion[] = [
-    {
-      id: 'mcq-1',
-      type: 'multiple-choice',
-      question: 'Choose the correct form of the verb: "She _____ to school every day."',
-      options: ['go', 'goes', 'going', 'gone'],
-      correctAnswer: 'goes',
-      explanation: 'The correct answer is "goes" because it follows the third person singular rule in present simple tense.',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-2',
-      type: 'multiple-choice',
-      question: 'Which sentence uses the correct article?',
-      options: ['I saw a elephant at zoo.', 'I saw an elephant at the zoo.', 'I saw elephant at zoo.', 'I saw an elephant at zoo.'],
-      correctAnswer: 'I saw an elephant at the zoo.',
-      explanation: 'We use "an" before words starting with vowel sounds, and "the" before specific nouns like "zoo".',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-3',
-      type: 'multiple-choice',
-      question: 'Select the correct plural form: "The _____ are flying in the sky."',
-      options: ['bird', 'birds', "birdes", "bird's"],
-      correctAnswer: 'birds',
-      explanation: 'The plural form of "bird" is "birds" - we simply add "s" to make it plural.',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-4',
-      type: 'multiple-choice',
-      question: 'Which word is a synonym for "happy"?',
-      options: ['sad', 'joyful', 'angry', 'tired'],
-      correctAnswer: 'joyful',
-      explanation: '"Joyful" is a synonym for "happy" as both words express positive emotions.',
-      difficulty: 'easy',
-      category: 'vocabulary'
-    },
-    {
-      id: 'mcq-5',
-      type: 'multiple-choice',
-      question: 'Complete the sentence: "If it rains tomorrow, I _____ stay at home."',
-      options: ['will', 'would', 'am', 'have'],
-      correctAnswer: 'will',
-      explanation: 'We use "will" to express future intention or decision made at the moment of speaking.',
-      difficulty: 'medium',
-      category: 'grammar'
-    },
-    {
-      id: 'cloze-1',
-      type: 'cloze',
-      question: 'Complete the passage:\n\nTom is a student. He _____ to school every morning. His school _____ near his house. He _____ his friends there and they _____ together.',
-      correctAnswer: 'goes,is,meets,study',
-      explanation: 'Present simple tense verbs: goes, is, meets, study.',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'cloze-2',
-      type: 'cloze',
-      question: "Fill in the blanks:\n\nThe weather _____ beautiful today. The sun _____ shining and birds _____ singing. It's a perfect day for a _____ in the park.",
-      correctAnswer: 'is,is,are,walk',
-      explanation: 'Use present/continuous appropriately: is, is, are, walk.',
-      difficulty: 'medium',
-      category: 'grammar'
-    },
-    {
-      id: 'cloze-3',
-      type: 'cloze',
-      question: 'Complete the story:\n\nYesterday, Sarah _____ to the library. She _____ a book about animals. The book _____ very interesting. She _____ it for two hours.',
-      correctAnswer: 'went,bought,was,read',
-      explanation: 'Past simple: went, bought, was, read.',
-      difficulty: 'medium',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-6',
-      type: 'multiple-choice',
-      question: 'Which word is the opposite of "difficult"?',
-      options: ['easy', 'hard', 'tough', 'strong'],
-      correctAnswer: 'easy',
-      explanation: 'Opposite of difficult is easy.',
-      difficulty: 'easy',
-      category: 'vocabulary'
-    },
-    {
-      id: 'mcq-7',
-      type: 'multiple-choice',
-      question: 'Choose the correct preposition: "He is good ___ math."',
-      options: ['at', 'in', 'on', 'with'],
-      correctAnswer: 'at',
-      explanation: '"Good at" is the correct collocation.',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-8',
-      type: 'multiple-choice',
-      question: "Which sentence is correct?",
-      options: ["She don't like apples.", "She doesn't likes apples.", "She doesn't like apples.", 'She not like apples.'],
-      correctAnswer: "She doesn't like apples.",
-      explanation: "Negative form with 3rd person singular: doesn't like.",
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'cloze-4',
-      type: 'cloze',
-      question: 'Fill in the blanks:\n\nMy father _____ (drive) to work every day. He _____ (not/use) the bus because it _____ (take) too long.',
-      correctAnswer: 'drives,does not use,takes',
-      explanation: 'Present simple agreement.',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'cloze-5',
-      type: 'cloze',
-      question: 'Complete the passage:\n\nThe children _____ (play) in the garden. Their mother _____ (watch) them from the window.',
-      correctAnswer: 'are playing,is watching',
-      explanation: 'Present continuous forms.',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'cloze-6',
-      type: 'cloze',
-      question: 'Fill in the blanks:\n\nYesterday, we _____ (go) to the zoo. We _____ (see) many animals and _____ (have) a lot of fun.',
-      correctAnswer: 'went,saw,had',
-      explanation: 'Past simple forms.',
-      difficulty: 'easy',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-9',
-      type: 'multiple-choice',
-      question: 'Which sentence uses the correct conditional form?',
-      options: ['If I will see him, I will tell him.', 'If I see him, I will tell him.', 'If I saw him, I will tell him.', 'If I see him, I tell him.'],
-      correctAnswer: 'If I see him, I will tell him.',
-      explanation: 'First conditional structure.',
-      difficulty: 'medium',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-10',
-      type: 'multiple-choice',
-      question: 'Choose the correct passive voice: "The letter _____ by John yesterday."',
-      options: ['writes', 'wrote', 'was written', 'is written'],
-      correctAnswer: 'was written',
-      explanation: 'Past simple passive: was + past participle.',
-      difficulty: 'medium',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-11',
-      type: 'multiple-choice',
-      question: 'Which sentence demonstrates the subjunctive mood?',
-      options: ['I wish I was rich.', 'I wish I were rich.', 'I am rich.', 'I will be rich.'],
-      correctAnswer: 'I wish I were rich.',
-      explanation: 'Subjunctive "were" with wish/hypothetical.',
-      difficulty: 'hard',
-      category: 'grammar'
-    },
-    {
-      id: 'mcq-12',
-      type: 'multiple-choice',
-      question: 'Identify the gerund in the sentence: "Swimming is my favorite sport."',
-      options: ['Swimming', 'is', 'my', 'sport'],
-      correctAnswer: 'Swimming',
-      explanation: '"Swimming" is used as a noun.',
-      difficulty: 'hard',
-      category: 'grammar'
-    }
-  ];
-
-  const filtered = baseQuestions.filter(q => q.difficulty === difficulty);
-  return shuffleArray(filtered);
-};
-
-function shuffleArray<T>(array: T[]): T[] {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
 // How many questions we want each run
-const QUESTIONS_PER_QUIZ = 3;
+const QUESTIONS_PER_QUIZ = 5;
 
 // ===============================
 // Component
@@ -244,122 +50,154 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
   const { persistQuiz, recordAttempt } = useQuizAttempts();
   const [quizId, setQuizId] = useState<string | null>(null);
 
-  // Load questions from backend (RAG). Fallback to local dynamic set if it fails.
-// Fixed useEffect in QuizGenerator.tsx - replace the existing useEffect
-
-useEffect(() => {
-  const load = async () => {
-    console.log("🚀 Frontend: Starting quiz generation for difficulty:", difficulty);
-    setError(null);
-    setIsLoading(true);
-    
-    try {
-      const backendQuiz = await fetchQuiz({
-        topic: 'English Grammar',
-        grade: 'Grade 6',
-        num_questions: QUESTIONS_PER_QUIZ,
-        skills: ['grammar', 'vocabulary'],
-        unit: 'General English',
-        query: 'PSAC Grade 6 English Grammar',
-        seed: Date.now() % 1_000_000
-      });
+  // UPDATED useEffect with enhanced API call for harder questions
+  useEffect(() => {
+    const loadQuiz = async () => {
+      console.log("🚀 Frontend: Starting quiz generation for difficulty:", difficulty);
+      setError(null);
+      setIsLoading(true);
       
-      console.log("📥 Frontend: Raw API response:", backendQuiz);
-      console.log("📊 Frontend: Response source:", backendQuiz.source);
-      console.log("📝 Frontend: Items received:", backendQuiz.items?.length || 0);
-      
-      // ✅ CRITICAL: Check if we actually got AI questions
-      if (backendQuiz.source === "llm" && backendQuiz.items && backendQuiz.items.length > 0) {
-        console.log("✅ SUCCESS: Using AI-generated questions!");
+      try {
+        // Generate unique identifiers for this quiz session
+        const timestamp = Date.now();
+        const sessionId = `quiz_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
         
-        const mapped = backendQuiz.items.map((it, idx) => {
-          console.log(`Mapping AI item ${idx}:`, it);
+        console.log('[Quiz] Starting new quiz generation:', { timestamp, sessionId, difficulty });
+        
+        // CRITICAL CHANGES: Request harder questions with variety
+        const backendQuiz = await fetchQuiz({
+          topic: 'Advanced English Grammar',  // Changed to advanced
+          grade: 'Grade 6-7',  // Transition level
+          num_questions: QUESTIONS_PER_QUIZ,
+          skills: ['complex grammar', 'advanced vocabulary', 'critical comprehension'],  // Enhanced skills
+          difficulty: difficulty === 'easy' ? 'medium' : difficulty === 'medium' ? 'hard' : 'challenging',  // Bump up difficulty
+          unit: `Session ${sessionId}`,
+          query: 'PSAC Grade 6-7 Advanced English',  // Advanced query
+          seed: Math.floor(Math.random() * 1000000),  // Random seed for variety
+          timestamp: timestamp,
+          session_id: sessionId
+        });
+        
+        console.log("📥 Frontend: Raw API response:", backendQuiz);
+        console.log("📊 Frontend: Response source:", backendQuiz.source);
+        console.log("📝 Frontend: Items received:", backendQuiz.items?.length || 0);
+        console.log("🎯 Frontend: First question preview:", backendQuiz.items?.[0]?.question?.substring(0, 60));
+        
+        // Check if we got AI-generated questions
+        if (backendQuiz.source === "llm" && backendQuiz.items && backendQuiz.items.length > 0) {
+          console.log("✅ SUCCESS: Using AI-generated questions!");
           
-          const questionType = it.type === "mcq" ? "multiple-choice" as const : "cloze" as const;
-          
-          let correctAnswer = String(it.answer ?? "");
-          if (it.type === "mcq" && Array.isArray(it.options) && it.options.length > 0) {
-            if (typeof it.answer === "number" && it.answer >= 0 && it.answer < it.options.length) {
-              correctAnswer = it.options[it.answer];
-            } else if (typeof it.answer === "string") {
-              const foundIndex = it.options.findIndex(opt => opt.toLowerCase() === it.answer.toLowerCase());
-              if (foundIndex >= 0) {
-                correctAnswer = it.options[foundIndex];
+          const mapped = backendQuiz.items.map((it, idx) => {
+            console.log(`Mapping AI item ${idx}:`, it);
+            
+            const questionType = it.type === "mcq" ? "multiple-choice" as const : "cloze" as const;
+            
+            let correctAnswer = String(it.answer ?? "");
+            if (it.type === "mcq" && Array.isArray(it.options) && it.options.length > 0) {
+              if (typeof it.answer === "number" && it.answer >= 0 && it.answer < it.options.length) {
+                correctAnswer = it.options[it.answer];
+              } else if (typeof it.answer === "string") {
+                const foundIndex = it.options.findIndex(opt => opt.toLowerCase() === it.answer.toLowerCase());
+                if (foundIndex >= 0) {
+                  correctAnswer = it.options[foundIndex];
+                }
               }
             }
-          }
+            
+            return {
+              id: it.id || `ai-${idx}`,
+              type: questionType,
+              question: String(it.question || ''),
+              options: Array.isArray(it.options) ? it.options : [],
+              correctAnswer: correctAnswer,
+              explanation: String(it.explanation ?? "Generated by AI"),
+              difficulty: difficulty,
+              category: "grammar" as const,
+            };
+          });
           
-          return {
-            id: it.id || `ai-${idx}`,
-            type: questionType,
-            question: String(it.question || ''),
-            options: Array.isArray(it.options) ? it.options : [],
-            correctAnswer: correctAnswer,
-            explanation: String(it.explanation ?? "Generated by AI"),
-            difficulty: difficulty,
-            category: "grammar" as const,
-          };
-        });
-        
-        const validMapped = mapped.filter(q => {
-          const isValid = q.question && q.question.trim() && 
-            (q.type === "multiple-choice" ? (q.options && q.options.length >= 2 && q.correctAnswer) : q.correctAnswer);
-          if (!isValid) {
-            console.warn("Invalid AI question:", q);
-          }
-          return isValid;
-        });
-        
-        if (validMapped.length > 0) {
-          console.log(`✅ Using ${validMapped.length} AI-generated questions`);
-          setShuffledQuestions(validMapped.slice(0, QUESTIONS_PER_QUIZ));
-          setBackendSource("llm");
-          
-          // Persist the AI quiz
-          try {
-            if (backendQuiz) {
-              const saved = await persistQuiz(backendQuiz);
-              setQuizId(saved.id);
-              console.log("✅ AI quiz saved with ID:", saved.id);
+          const validMapped = mapped.filter(q => {
+            const isValid = q.question && q.question.trim() && 
+              (q.type === "multiple-choice" ? (q.options && q.options.length >= 2 && q.correctAnswer) : q.correctAnswer);
+            if (!isValid) {
+              console.warn("Invalid AI question:", q);
             }
-          } catch (err) {
-            console.warn('Failed to save AI quiz:', err);
+            return isValid;
+          });
+          
+          if (validMapped.length > 0) {
+            console.log(`✅ Using ${validMapped.length} AI-generated questions`);
+            setShuffledQuestions(validMapped.slice(0, QUESTIONS_PER_QUIZ));
+            setBackendSource("llm");
+            
+            // Track to detect repetition (for debugging)
+            if (window.localStorage) {
+              const lastFirstQuestion = window.localStorage.getItem('last_first_question');
+              const currentFirstQuestion = validMapped[0]?.question;
+              
+              if (lastFirstQuestion === currentFirstQuestion) {
+                console.warn('[Quiz] WARNING: Same first question as last time!');
+                console.warn('[Quiz] Try clearing cache: localStorage.clear()');
+              } else {
+                console.log('[Quiz] ✅ Different first question from last time');
+              }
+              
+              // Check if it's the dreaded synonym question
+              if (currentFirstQuestion?.toLowerCase().includes("synonym") && 
+                  currentFirstQuestion?.toLowerCase().includes("happy")) {
+                console.warn('[Quiz] ⚠️ Got the repetitive synonym question! Backend may need restart.');
+              }
+              
+              window.localStorage.setItem('last_first_question', currentFirstQuestion || '');
+              window.localStorage.setItem('last_quiz_time', timestamp.toString());
+            }
+            
+            // Persist the AI quiz
+            try {
+              if (backendQuiz) {
+                const saved = await persistQuiz(backendQuiz);
+                setQuizId(saved.id);
+                console.log("✅ AI quiz saved with ID:", saved.id);
+              }
+            } catch (err) {
+              console.warn('Failed to save AI quiz:', err);
+            }
+          } else {
+            throw new Error("AI questions were invalid after mapping");
           }
         } else {
-          throw new Error("AI questions were invalid after mapping");
+          // Backend returned fallback or no items
+          throw new Error(`Backend returned: ${backendQuiz.source || 'unknown'} with ${backendQuiz.items?.length || 0} items`);
         }
-      } else {
-        // Backend returned fallback or no items
-        throw new Error(`Backend returned: ${backendQuiz.source || 'unknown'} with ${backendQuiz.items?.length || 0} items`);
+        
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        console.error("❌ Frontend: AI quiz generation failed:", error);
+        console.log("📚 Frontend: Using challenging fallback questions");
+        
+        // Use challenging fallback questions
+        setError(`Using fallback questions (${error.message})`);
+        const fallbackQuestions = generateChallengingFallback(difficulty);
+        setShuffledQuestions(fallbackQuestions.slice(0, QUESTIONS_PER_QUIZ));
+        setBackendSource("fallback");
+      } finally {
+        setIsLoading(false);
       }
-      
-    } catch (error) {
-      console.error("❌ Frontend: AI quiz generation failed:", error);
-      console.log("📚 Frontend: Using local fallback questions");
-      
-      // Use local fallback questions
-      setError(`Using fallback questions (${error.message})`);
-      const fallbackQuestions = shuffleArray(generateDynamicQuestions(difficulty)).slice(0, QUESTIONS_PER_QUIZ);
-      setShuffledQuestions(fallbackQuestions);
-      setBackendSource("fallback");
-    } finally {
-      setIsLoading(false);
-    }
 
-    // Reset session data
-    setCurrentQuestionIndex(0);
-    setSelectedAnswers([]);
-    setClozeAnswers(Array(QUESTIONS_PER_QUIZ).fill([]));
-    setShowResults(false);
-    setScore(0);
-    setStartTime(Date.now());
-    setSessionTime(0);
-    setFeedback('');
-    setShowExplanation(false);
-  };
+      // Reset session data
+      setCurrentQuestionIndex(0);
+      setSelectedAnswers([]);
+      setClozeAnswers(Array(QUESTIONS_PER_QUIZ).fill([]));
+      setShowResults(false);
+      setScore(0);
+      setStartTime(Date.now());
+      setSessionTime(0);
+      setFeedback('');
+      setShowExplanation(false);
+    };
 
-  load();
-}, [difficulty, persistQuiz]);
+    loadQuiz();
+  }, [difficulty, persistQuiz]);
 
   // Timer
   useEffect(() => {
@@ -368,6 +206,80 @@ useEffect(() => {
     }, 1000);
     return () => clearInterval(t);
   }, [startTime]);
+
+  // Challenging fallback questions
+  const generateChallengingFallback = (diff: string): QuizQuestion[] => {
+    const challengingQuestions: QuizQuestion[] = [
+      {
+        id: 'fallback-1',
+        type: 'multiple-choice',
+        question: 'Which sentence demonstrates correct use of the subjunctive mood?',
+        options: [
+          'If I was rich, I would travel.',
+          'If I were rich, I would travel.',
+          'If I am rich, I would travel.',
+          'If I will be rich, I would travel.'
+        ],
+        correctAnswer: 'If I were rich, I would travel.',
+        explanation: 'The subjunctive mood uses "were" for hypothetical situations.',
+        difficulty: 'hard',
+        category: 'grammar'
+      },
+      {
+        id: 'fallback-2',
+        type: 'multiple-choice',
+        question: 'Identify the type of figurative language: "The homework was a mountain of impossibility."',
+        options: ['Simile', 'Metaphor', 'Personification', 'Hyperbole'],
+        correctAnswer: 'Metaphor',
+        explanation: 'This is a metaphor - direct comparison without "like" or "as".',
+        difficulty: 'hard',
+        category: 'comprehension'
+      },
+      {
+        id: 'fallback-3',
+        type: 'multiple-choice',
+        question: 'Which sentence contains a dangling modifier?',
+        options: [
+          'Running quickly, John caught the bus.',
+          'Walking through the park, the flowers were beautiful.',
+          'After studying hard, she passed the exam.',
+          'While eating dinner, we watched TV.'
+        ],
+        correctAnswer: 'Walking through the park, the flowers were beautiful.',
+        explanation: 'The modifier "Walking through the park" incorrectly seems to modify "flowers".',
+        difficulty: 'hard',
+        category: 'grammar'
+      },
+      {
+        id: 'fallback-4',
+        type: 'multiple-choice',
+        question: 'Choose the word that completes the analogy: Doctor : Hospital :: Teacher : ?',
+        options: ['Student', 'Classroom', 'Book', 'Learning'],
+        correctAnswer: 'Classroom',
+        explanation: 'A doctor works in a hospital, just as a teacher works in a classroom.',
+        difficulty: 'medium',
+        category: 'vocabulary'
+      },
+      {
+        id: 'fallback-5',
+        type: 'multiple-choice',
+        question: 'Which sentence uses parallel structure correctly?',
+        options: [
+          'She likes reading, to swim, and biking.',
+          'She likes reading, swimming, and biking.',
+          'She likes to read, swimming, and to bike.',
+          'She likes read, swim, and biking.'
+        ],
+        correctAnswer: 'She likes reading, swimming, and biking.',
+        explanation: 'Parallel structure requires consistent grammatical forms.',
+        difficulty: 'hard',
+        category: 'grammar'
+      }
+    ];
+    
+    // Shuffle the questions
+    return challengingQuestions.sort(() => Math.random() - 0.5);
+  };
 
   const currentQuestion = shuffledQuestions[currentQuestionIndex];
 
@@ -397,7 +309,7 @@ useEffect(() => {
       if (allCorrect) {
         return { isCorrect: true, feedback: 'Correct! Well done!' };
       } else {
-        const diff = userParts.map((ans, idx) => ans === correctParts[idx] ? '✔️' : `❌ (${ans} → ${correctParts[idx]})`).join(' ');
+        const diff = userParts.map((ans, idx) => ans === correctParts[idx] ? '✓' : `✗ (${ans} → ${correctParts[idx]})`).join(' ');
         return { isCorrect: false, feedback: `Some answers are incorrect. ${diff}` };
       }
     } else {
@@ -543,7 +455,7 @@ useEffect(() => {
   if (!shuffledQuestions || shuffledQuestions.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <span className="text-gray-500">Loading questions...</span>
+        <span className="text-gray-500">Loading challenging questions...</span>
       </div>
     );
   }
@@ -563,7 +475,9 @@ useEffect(() => {
     <Card className="bg-white rounded-xl shadow-md p-6 max-w-2xl mx-auto">
       <CardHeader>
         <div className="flex justify-between items-center">
-          <CardTitle className="text-2xl font-bold text-blue-700">Dynamic Quiz (Textbook-backed)</CardTitle>
+          <CardTitle className="text-2xl font-bold text-blue-700">
+            Advanced Quiz {backendSource === 'llm' ? '(AI-Generated)' : '(Challenging Questions)'}
+          </CardTitle>
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-gray-500" />
             <span className="text-sm text-gray-600">
@@ -589,10 +503,10 @@ useEffect(() => {
         {error && <div className="text-xs text-amber-600 mt-2">{error}</div>}
         {backendSource && (
           <div className="text-xs mt-2">
-            {backendSource === "rag" ? (
-              <span className="text-green-700 bg-green-100 px-2 py-1 rounded">Textbook (RAG)</span>
+            {backendSource === "llm" ? (
+              <span className="text-green-700 bg-green-100 px-2 py-1 rounded">AI-Generated (Advanced)</span>
             ) : backendSource === "fallback" ? (
-              <span className="text-amber-700 bg-amber-100 px-2 py-1 rounded">Fallback</span>
+              <span className="text-amber-700 bg-amber-100 px-2 py-1 rounded">Challenging Fallback</span>
             ) : null}
           </div>
         )}
@@ -607,6 +521,14 @@ useEffect(() => {
           </Alert>
         )}
 
+        {showExplanation && (
+          <Alert className="bg-blue-50">
+            <AlertDescription>
+              <strong>Explanation:</strong> {currentQuestion.explanation}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex justify-between">
           <Button
             variant="outline"
@@ -617,7 +539,7 @@ useEffect(() => {
           </Button>
 
           <Button onClick={async () => {
-            // validate current question for per-item feedback (optional)
+            // Validate current question
             const q = currentQuestion;
             let userAnswer = '';
             if (q.type === 'multiple-choice') {

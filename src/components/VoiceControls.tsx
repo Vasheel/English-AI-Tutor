@@ -62,7 +62,7 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
   const isSpeechApiSupported = ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) as boolean;
   const isTtsApiSupported = 'SpeechSynthesisUtterance' in window;
 
-  const [isListening, setIsListening] = useState(false);
+  // Listening state handled by controlled SR hook
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -151,13 +151,7 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
           speak("I didn't understand that. Please try again.");
       }
 
-      // Reset speech recognition after command is processed
-      const rec = recognitionRef.current;
-      if (rec) {
-         rec.stop();                     // ⏹️ end current session
-         setTranscript("");              // clear UI
-         setTimeout(() => rec.start(), 300); // ▶️ fresh session
-      }
+      // Do not auto-restart; manual control only
 
     } catch (error) {
       console.error('Error processing speech input:', error);

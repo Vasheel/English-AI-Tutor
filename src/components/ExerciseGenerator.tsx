@@ -181,6 +181,182 @@ const ExerciseGenerator = () => {
       answer: "Sample: The teacher helps the student.",
       explanation: "Write a meaningful sentence that includes both words: 'teacher' and 'student'."
     }
+    ,
+    // --- Additional exercises to increase variety ---
+    // Remove extra word (more)
+    {
+      type: "remove_extra_word",
+      prompt: "Remove the extra word from the sentence.",
+      input: "He quickly quickly finished his homework.",
+      answer: "He quickly finished his homework.",
+      explanation: "The word 'quickly' was duplicated."
+    },
+    {
+      type: "remove_extra_word",
+      prompt: "Remove the extra word from the sentence.",
+      input: "They went to to the market yesterday.",
+      answer: "They went to the market yesterday.",
+      explanation: "The word 'to' was repeated unnecessarily."
+    },
+    {
+      type: "remove_extra_word",
+      prompt: "Remove the extra word from the sentence.",
+      input: "I am am very excited.",
+      answer: "I am very excited.",
+      explanation: "The word 'am' was repeated."
+    },
+
+    // Add punctuation (more)
+    {
+      type: "add_punctuation",
+      prompt: "Add the required capital letter and full stop.",
+      input: "we will visit the museum tomorrow",
+      answer: "We will visit the museum tomorrow.",
+      explanation: "Capitalize the first word and end with a period."
+    },
+    {
+      type: "add_punctuation",
+      prompt: "Add the required capital letter and question mark.",
+      input: "what time does the show start",
+      answer: "What time does the show start?",
+      explanation: "Capitalize the first word and use a question mark for questions."
+    },
+    {
+      type: "add_punctuation",
+      prompt: "Fix capitalization and end punctuation.",
+      input: "on monday we have a science test",
+      answer: "On Monday we have a science test.",
+      explanation: "Capitalize proper nouns and end with a period."
+    },
+
+    // Adverb placement (more)
+    {
+      type: "adverb_placement",
+      prompt: "Add the adverb 'quietly' in the right place.",
+      input: "The baby sleeps.",
+      answer: "The baby quietly sleeps.",
+      explanation: "Place the adverb before the verb to describe how the action is performed."
+    },
+    {
+      type: "adverb_placement",
+      prompt: "Add the adverb 'gently' in the right place.",
+      input: "She closed the door.",
+      answer: "She gently closed the door.",
+      explanation: "The adverb should modify the verb closely."
+    },
+    {
+      type: "adverb_placement",
+      prompt: "Add the adverb 'patiently' in the right place.",
+      input: "They waited for the bus.",
+      answer: "They patiently waited for the bus.",
+      explanation: "Place the adverb before the verb phrase."
+    },
+
+    // Word order (more)
+    {
+      type: "word_order",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "homework – his – did – he – yesterday",
+      answer: "He did his homework yesterday.",
+      explanation: "Subject + verb + object + time expression."
+    },
+    {
+      type: "word_order",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "football – after – plays – school – she",
+      answer: "She plays football after school.",
+      explanation: "Subject + verb + object + adverbial phrase."
+    },
+    {
+      type: "word_order",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "breakfast – usually – I – have – at – seven",
+      answer: "I usually have breakfast at seven.",
+      explanation: "Frequency adverb goes before the main verb."
+    },
+
+    // Negative form (more)
+    {
+      type: "negative_form",
+      prompt: "Transform the sentence into its negative form.",
+      input: "He likes spicy food.",
+      answer: "He does not like spicy food.",
+      explanation: "Use 'does not' and base verb for third person singular."
+    },
+    {
+      type: "negative_form",
+      prompt: "Transform the sentence into its negative form.",
+      input: "They went to the concert.",
+      answer: "They did not go to the concert.",
+      explanation: "Use 'did not' and base verb in the past tense."
+    },
+    {
+      type: "negative_form",
+      prompt: "Transform the sentence into its negative form.",
+      input: "We will travel tomorrow.",
+      answer: "We will not travel tomorrow.",
+      explanation: "Add 'not' after 'will' for future negative."
+    },
+
+    // Interrogative form (more)
+    {
+      type: "interrogative_form",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "They are ready for the trip.",
+      answer: "Are they ready for the trip?",
+      explanation: "Move the verb 'are' to the beginning to form a question."
+    },
+    {
+      type: "interrogative_form",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "She finished her work.",
+      answer: "Did she finish her work?",
+      explanation: "Use 'did' and base verb to form a past simple question."
+    },
+    {
+      type: "interrogative_form",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "He can solve the problem.",
+      answer: "Can he solve the problem?",
+      explanation: "Move the modal verb to the front to form a question."
+    },
+
+    // Use given words (more)
+    {
+      type: "use_given_words",
+      prompt: "Write one sentence using the following words: museum – painting",
+      input: "museum – painting",
+      answer: "Sample: The museum displayed a beautiful painting.",
+      explanation: "Write a sentence that includes both words."
+    },
+    {
+      type: "use_given_words",
+      prompt: "Write one sentence using the following words: garden – butterfly",
+      input: "garden – butterfly",
+      answer: "Sample: A colorful butterfly flew across the garden.",
+      explanation: "Write a sentence that includes both words."
+    },
+    {
+      type: "use_given_words",
+      prompt: "Write one sentence using the following words: computer – homework",
+      input: "computer – homework",
+      answer: "Sample: I used the computer to finish my homework.",
+      explanation: "Write a sentence that includes both words."
+    },
+    {
+      type: "use_given_words",
+      prompt: "Write one sentence using the following words: river – bridge",
+      input: "river – bridge",
+      answer: "Sample: The old bridge crosses the wide river.",
+      explanation: "Write a sentence that includes both words."
+    },
+    {
+      type: "use_given_words",
+      prompt: "Write one sentence using the following words: library – silence",
+      input: "library – silence",
+      answer: "Sample: There was complete silence in the library.",
+      explanation: "Write a sentence that includes both words."
+    }
   ];
 
   // Remove the old generator functions and replace with simple random selection

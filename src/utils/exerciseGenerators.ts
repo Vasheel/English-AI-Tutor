@@ -22,11 +22,33 @@ const sampleSentences = [
   "The dog runs fast.",
   "The boy eats an apple.",
   "The woman drives a car.",
-  "The students study hard."
+  "The students study hard.",
+  // Additional sentences
+  "He finishes his homework quickly.",
+  "They visit their grandparents on Sundays.",
+  "The baby sleeps peacefully.",
+  "She closes the door gently.",
+  "We wait for the bus every morning.",
+  "He likes spicy food.",
+  "They went to the concert last night.",
+  "We will travel tomorrow.",
+  "They are ready for the trip.",
+  "She finished her work.",
+  "He can solve the problem.",
+  "I usually have breakfast at seven.",
+  "She plays football after school.",
+  "He did his homework yesterday."
 ];
 
-const extraWords = ["the", "a", "an", "and", "or", "but", "very", "quite", "really", "so", "too", "also"];
-const adverbs = ["noisily", "quietly", "quickly", "slowly", "happily", "sadly", "carefully", "loudly", "softly", "gently", "angrily", "patiently"];
+const extraWords = [
+  "the", "a", "an", "and", "or", "but", "very", "quite", "really", "so", "too", "also",
+  // Common repeats for error patterns
+  "to", "am", "quickly"
+];
+const adverbs = [
+  "noisily", "quietly", "quickly", "slowly", "happily", "sadly", "carefully", "loudly", "softly",
+  "gently", "angrily", "patiently", "peacefully"
+];
 const wordPairs = [
   ["cyclone", "radio"],
   ["book", "library"],
@@ -39,7 +61,13 @@ const wordPairs = [
   ["farmer", "field"],
   ["pilot", "airplane"],
   ["sailor", "ship"],
-  ["firefighter", "fire"]
+  ["firefighter", "fire"],
+  // Additional pairs
+  ["museum", "painting"],
+  ["garden", "butterfly"],
+  ["computer", "homework"],
+  ["river", "bridge"],
+  ["library", "silence"]
 ];
 
 // Generator functions for each exercise type

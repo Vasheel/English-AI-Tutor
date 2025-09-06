@@ -1,7 +1,7 @@
-# server/routes/quizzes.py - Enhanced with better debugging and error handling
+# server/routes/quizzes.py - Enhanced with better variety and challenging questions
 from fastapi import APIRouter, HTTPException
 from openai import OpenAI
-import os, json, uuid, traceback
+import os, json, uuid, traceback, random, time
 from ..structured_schema import QUIZ_RESPONSE_FORMAT
 from ..quiz_schema import GenerateQuizPayload, BackendQuizResponse, QuizItem
 
@@ -12,6 +12,45 @@ except Exception:
     rag_search = None
 
 router = APIRouter(prefix="/api/quizzes", tags=["quizzes"])
+
+# Question variety templates
+QUESTION_FORMATS = [
+    "multiple choice about {topic}",
+    "fill in the blank for {topic}",
+    "true or false regarding {topic}",
+    "identify the error in {topic}",
+    "choose the synonym/antonym for {topic}",
+    "complete the sentence using {topic}",
+    "match the definition with {topic}",
+    "rewrite the sentence applying {topic}"
+]
+
+QUESTION_CONTEXTS = [
+    "in a school setting",
+    "at home with family",
+    "during a sports activity",
+    "while reading a book",
+    "in Port Louis market",
+    "during a Mauritian festival",
+    "at the beach",
+    "in a classroom discussion",
+    "while helping parents",
+    "with friends at play"
+]
+
+# Challenging start patterns to avoid repetitive simple questions
+START_PATTERNS = [
+    "complex grammar rule",
+    "advanced vocabulary in context",
+    "reading comprehension with inference",
+    "identify the error",
+    "sentence transformation",
+    "figurative language",
+    "text analysis",
+    "parallel structure",
+    "verb tenses and aspects",
+    "punctuation and mechanics"
+]
 
 def get_openai_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
@@ -59,9 +98,29 @@ def generate_quiz(payload: GenerateQuizPayload):
     
     # Normalize inputs
     count = payload.count or payload.num_questions or 6
-    skills = payload.skills or ["grammar"]
+    skills = payload.skills or ["grammar", "vocabulary", "comprehension"]
     query_text = payload.query or payload.topic or "PSAC Grade 6 English"
     unit = payload.unit
+    
+    # Force variety by shuffling skills
+    random.shuffle(skills)
+    
+    # Add complexity variations for harder questions
+    if len(skills) == 1:
+        skill_variations = {
+            "grammar": ["complex sentences", "advanced punctuation", "passive voice", "reported speech", "conditionals"],
+            "vocabulary": ["idioms", "phrasal verbs", "word formation", "contextual meanings", "advanced synonyms"],
+            "comprehension": ["inference", "author's purpose", "critical analysis", "figurative language", "text structure"],
+            # Handle the enhanced skills from frontend
+            "complex grammar": ["subjunctive mood", "parallel structure", "dangling modifiers", "verb aspects"],
+            "advanced vocabulary": ["etymology", "connotation vs denotation", "register and formality", "collocations"],
+            "critical comprehension": ["implicit meanings", "tone and mood", "rhetorical devices", "argument analysis"]
+        }
+        base_skill = skills[0].replace("complex ", "").replace("advanced ", "").replace("critical ", "")
+        skills = skills + random.sample(
+            skill_variations.get(skills[0], skill_variations.get(base_skill, [])), 
+            min(2, len(skill_variations.get(skills[0], skill_variations.get(base_skill, []))))
+        )
     
     print(f"[DEBUG] Normalized - count: {count}, skills: {skills}, query: {query_text}, unit: {unit}")
 
@@ -77,7 +136,7 @@ def generate_quiz(payload: GenerateQuizPayload):
     except Exception as e:
         print(f"[DEBUG] Client/Model setup failed: {e}")
         print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-        return create_fallback_response(count, f"OpenAI setup failed: {str(e)}")
+        return create_challenging_fallback_response(count)
 
     # RAG call (optional)
     passages = []
@@ -88,37 +147,121 @@ def generate_quiz(payload: GenerateQuizPayload):
         except Exception as e:
             print(f"[DEBUG] RAG retrieval failed: {e}")
 
-    # Prepare OpenAI request
+    # Prepare OpenAI request with enhanced variety and difficulty
     try:
+        # Select random starting pattern to avoid repetition
+        random_start = random.choice(START_PATTERNS)
+        selected_formats = random.sample(QUESTION_FORMATS, min(count, len(QUESTION_FORMATS)))
+        selected_contexts = random.sample(QUESTION_CONTEXTS, min(count, len(QUESTION_CONTEXTS)))
+        
+        print(f"[DEBUG] Using random start pattern: {random_start}")
+        
+        # ENHANCED system prompt for CHALLENGING questions
         system_prompt = (
-            "You are a PSAC Grade 6 English quiz generator for Mauritius students. "
-            "Generate quiz questions that are appropriate for Grade 6 level. "
-            "Return ONLY valid JSON in this exact format: "
-            '{"items": [{"id": "q1", "type": "mcq", "question": "What is the past tense of \'go\'?", "options": ["went", "goes", "going", "gone"], "answer": 0, "explanation": "The past tense of \'go\' is \'went\'"}]}'
+            "You are a PSAC Grade 6 English quiz generator for ADVANCED students in Mauritius. "
+            "Generate CHALLENGING questions that require critical thinking and deep understanding. "
+            "\n\nDIFFICULTY REQUIREMENTS:\n"
+            "- Questions should be at the UPPER END of Grade 6 level, preparing for Grade 7\n"
+            "- Include complex grammar structures, advanced vocabulary, and analytical thinking\n"
+            "- Avoid simple recall questions - focus on application and analysis\n"
+            "- Include distractors in options that are plausible but incorrect\n"
+            "\n\nVARIETY REQUIREMENTS:\n"
+            "- NEVER start with simple synonym questions like 'What is a synonym for happy?'\n"
+            "- Each quiz MUST begin with a DIFFERENT type of question\n"
+            "- Rotate between different skills and formats\n"
+            "- NO repetition of question patterns\n"
+            "\n\nReturn ONLY valid JSON in this exact format:\n"
+            '{"items": [{"id": "q1", "type": "mcq|fitb|true-false|short-answer", '
+            '"question": "UNIQUE challenging question", '
+            '"options": ["A", "B", "C", "D"], "answer": 0 or "text answer", '
+            '"explanation": "Detailed explanation"}]}'
         )
         
+        # Create variety instructions with challenging focus
+        variety_instructions = []
+        for i in range(count):
+            format_idx = i % len(selected_formats)
+            context_idx = i % len(selected_contexts)
+            skill_idx = i % len(skills)
+            
+            # Ensure first question is never a simple synonym
+            if i == 0:
+                instruction = (
+                    f"Question 1: MUST be a {random_start} question - "
+                    f"NOT a simple synonym or basic definition. "
+                    f"Make it challenging and thought-provoking. "
+                )
+            else:
+                instruction = (
+                    f"Question {i+1}: Use {selected_formats[format_idx].format(topic=skills[skill_idx])} "
+                    f"{selected_contexts[context_idx]}. "
+                )
+            variety_instructions.append(instruction)
+        
+        # Dynamic user prompt with strong emphasis on difficulty and variety
         user_prompt = (
-            f"Generate {count} quiz questions for Grade 6 English students in Mauritius (PSAC level). "
-            f"Focus on these skills: {', '.join(skills)}. "
-            f"Topic/Unit: {query_text} (Unit {unit}). "
-            f"Keywords to include: {', '.join(payload.keywords or [])}. "
-            f"Make questions appropriate for Grade 6 level and relevant to Mauritius PSAC curriculum."
+            f"Generate EXACTLY {count} CHALLENGING questions for ADVANCED Grade 6 English students. "
+            f"Topic: {query_text} (Unit {unit}). Skills: {', '.join(skills)}. "
+            f"\n\nCRITICAL REQUIREMENTS:\n"
+            f"1. START with a {random_start} question - NOT a simple synonym question\n"
+            f"2. Make questions HARDER than typical Grade 6 level - think Grade 6/7 transition\n"
+            f"3. Question difficulty: mix medium-hard and hard questions\n"
+            f"\n\nVARIETY INSTRUCTIONS:\n"
+            + "\n".join(variety_instructions) +
+            f"\n\nEXAMPLE CHALLENGING QUESTIONS (use as inspiration):\n"
+            f"- 'Which sentence correctly uses the past perfect continuous tense?'\n"
+            f"- 'Identify the literary device: The stars danced playfully in the moonlit sky'\n"
+            f"- 'Choose the sentence with correct parallel structure'\n"
+            f"- 'What can be inferred about the character based on the context clues?'\n"
+            f"- 'Which word best replaces the underlined word without changing meaning?'\n"
+            f"- 'Identify the type of clause in the complex sentence'\n"
+            f"- 'Which sentence demonstrates the subjunctive mood?'\n"
+            f"\n\nAVOID THESE EASY PATTERNS:\n"
+            f"- Simple 'What is a synonym for X?' as ANY question, especially the first\n"
+            f"- Basic verb tenses like 'What is the past tense of go?'\n"
+            f"- Simple definitions like 'What is a noun?'\n"
+            f"- Questions a Grade 4 student could answer\n"
+            f"\n\nIMPORTANT RULES:\n"
+            f"1. NO two questions should have similar structure or wording\n"
+            f"2. Use DIFFERENT vocabulary in each question\n"
+            f"3. Each question must test a different aspect\n"
+            f"4. Include Mauritius-specific content where appropriate\n"
+            f"5. Questions should require reasoning, not just recall\n"
+            f"\n\nRandomization seed: {random.randint(100000, 999999)}\n"
+            f"Timestamp: {int(time.time())}\n"
+            f"Session ID: {uuid.uuid4().hex[:8]}"
         )
+        
+        if payload.keywords:
+            user_prompt += f"\nKeywords to incorporate creatively: {', '.join(payload.keywords)}"
         
         print(f"[DEBUG] System prompt length: {len(system_prompt)}")
-        print(f"[DEBUG] User prompt: {user_prompt[:200]}...")
+        print(f"[DEBUG] User prompt preview: {user_prompt[:300]}...")
         
-        # Make OpenAI API call
-        print("[DEBUG] Making OpenAI API call...")
-        chat = client.chat.completions.create(
-            model=model,
-            messages=[
+        # Make OpenAI API call with parameters optimized for variety and difficulty
+        print("[DEBUG] Making OpenAI API call with variety parameters...")
+        
+        # Use seed parameter if available (OpenAI API v1.1.0+)
+        api_params = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
-            max_tokens=2000  # Ensure we get complete responses
-        )
+            "temperature": 0.95,  # High for maximum variety
+            "max_tokens": 3000,   # Enough for detailed questions
+            "presence_penalty": 0.8,  # Strong penalty against repetition
+            "frequency_penalty": 0.8,  # Encourage diverse vocabulary
+            "top_p": 0.95  # Increase randomness
+        }
+        
+        # Add seed if using newer OpenAI API
+        try:
+            api_params["seed"] = random.randint(0, 1000000)
+        except:
+            pass  # Older API versions don't support seed
+        
+        chat = client.chat.completions.create(**api_params)
         
         print("[DEBUG] OpenAI API call successful")
         content = chat.choices[0].message.content.strip()
@@ -132,7 +275,7 @@ def generate_quiz(payload: GenerateQuizPayload):
         except json.JSONDecodeError as e:
             print(f"[DEBUG] JSON parsing failed: {e}")
             print(f"[DEBUG] Full content that failed: {repr(content)}")
-            return create_fallback_response(count, f"Invalid JSON from OpenAI: {str(e)}")
+            return create_challenging_fallback_response(count)
 
         # Extract quiz items
         quiz_items = []
@@ -144,18 +287,35 @@ def generate_quiz(payload: GenerateQuizPayload):
             quiz_items = data
         else:
             print(f"[DEBUG] Unexpected data structure: {data}")
-            return create_fallback_response(count, f"Unexpected response structure from OpenAI")
+            return create_challenging_fallback_response(count)
 
         print(f"[DEBUG] Extracted {len(quiz_items)} quiz items")
         
+        # Additional shuffling of all but first question to ensure variety
+        if len(quiz_items) > 1:
+            first_item = quiz_items[0]
+            rest = quiz_items[1:]
+            random.shuffle(rest)
+            quiz_items = [first_item] + rest
+        
         # Normalize quiz items
         normalized_items = []
+        seen_questions = set()  # Track to avoid duplicates
+        
         for i, q in enumerate(quiz_items):
             try:
                 # Ensure required fields
                 q_id = q.get("id", f"ai_q_{i+1}")
                 q_type = q.get("type", "mcq")
                 question = q.get("question") or q.get("prompt", f"Question {i+1}")
+                
+                # Skip if question is too similar to a previous one
+                question_key = question.lower().strip()[:50]
+                if question_key in seen_questions:
+                    print(f"[DEBUG] Skipping duplicate question: {question[:50]}...")
+                    continue
+                seen_questions.add(question_key)
+                
                 options = q.get("options", [])
                 answer = q.get("answer", 0)
                 explanation = q.get("explanation", "No explanation provided")
@@ -168,6 +328,7 @@ def generate_quiz(payload: GenerateQuizPayload):
                     answer=answer,
                     explanation=explanation
                 )
+                
                 normalized_items.append(item)
                 print(f"[DEBUG] Normalized item {i+1}: {item.question[:50]}...")
                 
@@ -178,60 +339,129 @@ def generate_quiz(payload: GenerateQuizPayload):
 
         if not normalized_items:
             print("[DEBUG] No items could be normalized")
-            return create_fallback_response(count, "Failed to normalize any quiz items")
-
+            return create_challenging_fallback_response(count)
+        
         final_items = normalized_items[:count]
-        print(f"[DEBUG] Returning {len(final_items)} items, source: llm")
+        print(f"[DEBUG] Returning {len(final_items)} varied items, source: llm")
+        print(f"[DEBUG] First question preview: {final_items[0].question[:100]}...")
         
         return BackendQuizResponse(
             items=final_items,
-            source="llm"
+            source="llm",
+            metadata={
+                "model": model,
+                "temperature": 0.95,
+                "timestamp": int(time.time()),
+                "difficulty": "challenging",
+                "start_pattern": random_start,
+                "session": uuid.uuid4().hex[:8]
+            }
         )
 
     except Exception as e:
         print(f"[DEBUG] OpenAI request failed: {e}")
         print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
-        return create_fallback_response(count, f"OpenAI request failed: {str(e)}")
+        return create_challenging_fallback_response(count)
 
-def create_fallback_response(count: int, error_reason: str) -> BackendQuizResponse:
-    """Create fallback response with debugging info"""
-    print(f"[DEBUG] Creating fallback response, reason: {error_reason}")
+def create_challenging_fallback_response(count: int) -> BackendQuizResponse:
+    """Create challenging fallback questions for when API fails"""
+    print(f"[DEBUG] Creating challenging fallback response")
     
-    fallback_items = [
+    challenging_questions = [
         QuizItem(
-            id="fallback_1", 
-            type="mcq", 
-            question="What is the past tense of 'eat'?", 
-            options=["ate", "eating", "eats", "eaten"], 
-            answer=0, 
-            explanation="The past tense of 'eat' is 'ate'"
+            id="fallback_1",
+            type="mcq",
+            question="Which sentence demonstrates correct use of the subjunctive mood?",
+            options=[
+                "If I was rich, I would travel the world.",
+                "If I were rich, I would travel the world.",
+                "If I am rich, I would travel the world.",
+                "If I will be rich, I would travel the world."
+            ],
+            answer=1,
+            explanation="The subjunctive mood uses 'were' instead of 'was' for hypothetical situations, regardless of the subject."
         ),
         QuizItem(
-            id="fallback_2", 
-            type="mcq", 
-            question="Which word is a noun?", 
-            options=["run", "quickly", "book", "happy"], 
-            answer=2, 
-            explanation="'Book' is a noun - it names a thing"
+            id="fallback_2",
+            type="mcq",
+            question="Identify the type of figurative language: 'The homework was a mountain of impossibility.'",
+            options=["Simile", "Metaphor", "Personification", "Hyperbole"],
+            answer=1,
+            explanation="This is a metaphor - it directly compares homework to a mountain without using 'like' or 'as'."
         ),
         QuizItem(
-            id="fallback_3", 
-            type="fitb", 
-            question="I ___ to school every day.", 
-            answer="go", 
-            explanation="'Go' is the correct present tense verb"
+            id="fallback_3",
+            type="mcq",
+            question="Which sentence contains a dangling modifier?",
+            options=[
+                "Running quickly, John caught the bus.",
+                "Walking through the park, the flowers were beautiful.",
+                "After studying hard, she passed the exam.",
+                "While eating dinner, we watched TV."
+            ],
+            answer=1,
+            explanation="'Walking through the park' appears to modify 'flowers', but flowers can't walk - this is a dangling modifier."
         ),
         QuizItem(
-            id="fallback_4", 
-            type="mcq", 
-            question="What type of sentence is this: 'Close the door!'?", 
-            options=["statement", "question", "command", "exclamation"], 
-            answer=2, 
-            explanation="This is a command sentence - it tells someone to do something"
+            id="fallback_4",
+            type="mcq",
+            question="Choose the word that best completes the analogy: Doctor : Hospital :: Teacher : ?",
+            options=["Student", "Classroom", "Book", "Learning"],
+            answer=1,
+            explanation="A doctor works in a hospital, just as a teacher works in a classroom. This is a place relationship analogy."
+        ),
+        QuizItem(
+            id="fallback_5",
+            type="mcq",
+            question="Which sentence uses parallel structure correctly?",
+            options=[
+                "She likes reading, to swim, and biking.",
+                "She likes reading, swimming, and biking.",
+                "She likes to read, swimming, and to bike.",
+                "She likes read, swim, and biking."
+            ],
+            answer=1,
+            explanation="Parallel structure requires all items in a list to have the same grammatical form: reading, swimming, biking (all gerunds)."
+        ),
+        QuizItem(
+            id="fallback_6",
+            type="mcq",
+            question="What is the effect of using passive voice in this sentence: 'Mistakes were made'?",
+            options=[
+                "It emphasizes who made the mistakes",
+                "It obscures who is responsible for the mistakes",
+                "It makes the sentence more direct",
+                "It shortens the sentence"
+            ],
+            answer=1,
+            explanation="Passive voice hides the agent (who made the mistakes), often used to avoid assigning blame or responsibility."
+        ),
+        QuizItem(
+            id="fallback_7",
+            type="fitb",
+            question="Complete with the correct word: 'The committee ____ unable to reach a consensus.' (was/were)",
+            options=["was", "were"],
+            answer="was",
+            explanation="'Committee' is a collective noun that is typically treated as singular in American English, so 'was' is correct."
+        ),
+        QuizItem(
+            id="fallback_8",
+            type="mcq",
+            question="Which transition word indicates a contrasting relationship?",
+            options=["Furthermore", "Nevertheless", "Similarly", "Therefore"],
+            answer=1,
+            explanation="'Nevertheless' indicates contrast or opposition, similar to 'however' or 'despite this'."
         )
     ]
     
+    # Shuffle to ensure variety even in fallback
+    random.shuffle(challenging_questions)
+    
     return BackendQuizResponse(
-        items=fallback_items[:count],
-        source=f"fallback ({error_reason})"
+        items=challenging_questions[:count],
+        source="fallback (challenging)"
     )
+
+def create_fallback_response(count: int, error_reason: str) -> BackendQuizResponse:
+    """Redirect to challenging fallback"""
+    return create_challenging_fallback_response(count)
