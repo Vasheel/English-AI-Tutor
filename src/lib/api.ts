@@ -202,3 +202,36 @@ export async function generateQuiz(payload: GenerateQuizPayload = {
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<{ reply: string }>;
   }
+
+  // Grammar evaluation via backend to avoid exposing OpenAI keys
+  export type GrammarEvaluatePayload = {
+    text: string;
+    image_id?: string | null;
+    mode?: string | null; // "minimal" | "fluency"
+    dialect?: string | null; // e.g. "en-GB" | "en-US"
+    grade_level?: number | null;
+  };
+
+  export type GrammarEvaluateResponse = {
+    corrected: string;
+    diff: Array<{ op: 'equal' | 'replace'; token: string }>
+    explanations: string[];
+    score: number;
+    tags: { [k: string]: number };
+    confidence: string;
+    context_score?: number;
+    context_passed?: boolean;
+    grammar_score?: number;
+  };
+
+  export async function evaluateGrammar(payload: GrammarEvaluatePayload): Promise<GrammarEvaluateResponse> {
+    const headers = { 'Content-Type': 'application/json', ...(await withAuthHeaders()) };
+    const res = await fetch(`${API}/api/grammar/evaluate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }

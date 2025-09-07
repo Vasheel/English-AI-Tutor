@@ -1,8 +1,9 @@
 
 import { useState } from "react";
-import { Loader, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { evaluateGrammar, type GrammarEvaluateResponse } from "@/lib/api";
 
 
 
@@ -72,64 +73,9 @@ const GrammarCorrector = () => {
     setCorrections([]);
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages: [
-            {
-              role: "system",
-              content: `You are a helpful grammar tutor for 6th grade students. Analyze the text and provide:
-              1. The corrected version
-              2. A list of specific corrections with explanations
-              
-              Format your response as JSON:
-              {
-                "corrected": "The corrected sentence here",
-                "corrections": [
-                  {
-                    "original": "incorrect word/phrase",
-                    "corrected": "correct word/phrase", 
-                    "explanation": "Simple explanation why this was wrong"
-                  }
-                ],
-                "encouragement": "A positive message for the student"
-              }`
-            },
-            {
-              role: "user",
-              content: input,
-            },
-          ],
-          temperature: 0.2,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.choices && data.choices[0]?.message?.content) {
-        try {
-          const result = JSON.parse(data.choices[0].message.content);
-          setCorrected(result.corrected || data.choices[0].message.content);
-          setCorrections(result.corrections || []);
-          
-          if (result.encouragement) {
-            toast({
-              title: "Great work!",
-              description: result.encouragement,
-            });
-          }
-        } catch {
-          // Fallback to plain text if JSON parsing fails
-          setCorrected(data.choices[0].message.content);
-        }
-      } else {
-        throw new Error("Could not process response.");
-      }
+      const data: GrammarEvaluateResponse = await evaluateGrammar({ text: input });
+      setGrammarResult(data as unknown as GrammarResponse);
+      setCorrected("");
     } catch (err) {
       console.error("Grammar correction error:", err);
       
@@ -156,11 +102,7 @@ const GrammarCorrector = () => {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      if (imageMode && selectedImage) {
-        evaluateGrammarWithImage(input);
-      } else {
-        correctGrammar();
-      }
+      correctGrammar();
     }
   };
 
@@ -369,10 +311,7 @@ const GrammarCorrector = () => {
         <div className="mt-4 p-3 bg-red-100 text-red-700 border border-red-300 rounded-lg flex items-center gap-2">
           <AlertCircle className="h-5 w-5" />
           <span>{error}</span>
-          <button
-            onClick={() => imageMode && selectedImage ? evaluateGrammarWithImage(input) : correctGrammar()}
-            className="ml-auto text-red-700 hover:text-red-900"
-          >
+          <button onClick={() => correctGrammar()} className="ml-auto text-red-700 hover:text-red-900">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
