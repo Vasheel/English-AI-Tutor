@@ -150,7 +150,7 @@ const generateRandomQuiz = async () => {
     
     try {
       // Pick a random variation
-      const variation = QUIZ_VARIATIONS[Math.floor(Math.random() * QUIZ_VARIATIONS.length)];
+      let variation = QUIZ_VARIATIONS[Math.floor(Math.random() * QUIZ_VARIATIONS.length)];
       
       // Calculate progressive difficulty
       // Within each level, make it progressively harder based on streak
@@ -185,17 +185,46 @@ const generateRandomQuiz = async () => {
         enhancedPrompt += ` Make these questions slightly easier to build confidence.`;
       }
       
-      // Generate quiz with proper difficulty parameters
-      const quizData = await generateQuiz({
-        skills: variation.skills.filter(skill => skill !== 'comprehension'), // Remove comprehension
-        keywords: variation.keywords,
-        difficulty: difficultyMap[currentDifficulty], // Send correct difficulty string
-        count: 5,
-        grade: 'Grade 6',
-        query: enhancedPrompt + ` Generate standalone questions that don't require any external text or passage.`, // Use enhanced prompt with progressive difficulty
-        topic: `${variation.skills.join(' and ')} - Level ${currentDifficulty}`, // Include level in topic
-        seed: Date.now() % 1000000
-      });
+      // Build a small helper to call once with a seed and optional avoid list
+      const fetchOnce = async (seed: number, avoidList: string[]) => {
+        const sessionId = `smart_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+        const keywords = [...variation.keywords].sort(() => Math.random() - 0.5).slice(0, 3);
+        const avoidText = avoidList.length > 0 ? ` Avoid reusing any of these exact question wordings: ${avoidList.slice(0,5).join(' | ')}` : '';
+        return generateQuiz({
+          skills: variation.skills.filter(skill => skill !== 'comprehension'),
+          keywords,
+          difficulty: difficultyMap[currentDifficulty],
+          count: 5,
+          grade: 'Grade 6',
+          query: enhancedPrompt + ` Generate standalone questions that don't require any external text or passage.` + ` UNIQUE REQUEST ID: ${sessionId}.` + avoidText,
+          topic: `${variation.skills.join(' and ')} - Level ${currentDifficulty}`,
+          seed
+        });
+      };
+
+      // Read last questions to avoid repetition
+      const lastQuestions: string[] = JSON.parse(window.localStorage?.getItem('last_smart_quiz_questions') || '[]');
+
+      // First attempt
+      let quizData = await fetchOnce(Math.floor(Math.random() * 1_000_000), lastQuestions);
+
+      // If repetition detected, try a different variation/seed once more
+      if (quizData.items && quizData.items.length > 0) {
+        const currentQuestions = quizData.items.map(i => String(i.question || ''));
+        const overlap = currentQuestions.filter(q => lastQuestions.includes(q));
+        const hasRepetition = overlap.length >= Math.min(2, currentQuestions.length);
+        if (hasRepetition) {
+          console.warn('[SmartQuiz] Repetition detected across runs, regenerating with new seed and variation.');
+          // choose a different variation
+          const alt = QUIZ_VARIATIONS.filter(v => v !== variation);
+          if (alt.length > 0) variation = alt[Math.floor(Math.random() * alt.length)];
+          quizData = await fetchOnce(Math.floor(Math.random() * 1_000_000), currentQuestions);
+        }
+        // Persist for next run comparison
+        try {
+          window.localStorage?.setItem('last_smart_quiz_questions', JSON.stringify(currentQuestions.slice(0, 5)));
+        } catch {}
+      }
   
       if (quizData.items && quizData.items.length > 0) {
         setCurrentQuiz(quizData);

@@ -56,32 +56,62 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
       console.log("🚀 Frontend: Starting quiz generation for difficulty:", difficulty);
       setError(null);
       setIsLoading(true);
-      
+
+     
+const skillRotation = [
+  ['complex grammar', 'advanced punctuation', 'sentence transformation'],
+  ['figurative language', 'literary devices', 'rhetorical analysis'],
+  ['parallel structure', 'dangling modifiers', 'subjunctive mood'],
+  ['advanced vocabulary', 'etymology', 'contextual meanings'],
+  ['inference', 'critical analysis', 'author\'s purpose']
+];
+
+// Pick a random skill set
+const selectedSkills = skillRotation[Math.floor(Math.random() * skillRotation.length)];  
+
+
       try {
         // Generate unique identifiers for this quiz session
         const timestamp = Date.now();
         const sessionId = `quiz_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
+        const randomNum = Math.floor(Math.random() * 1_000_000);
         
         console.log('[Quiz] Starting new quiz generation:', { timestamp, sessionId, difficulty });
         
         // CRITICAL CHANGES: Request harder questions with variety
-        const backendQuiz = await fetchQuiz({
-          topic: 'Advanced English Grammar',  // Changed to advanced
-          grade: 'Grade 6-7',  // Transition level
-          num_questions: QUESTIONS_PER_QUIZ,
-          skills: ['complex grammar', 'advanced vocabulary', 'critical comprehension'],  // Enhanced skills
-          difficulty: difficulty === 'easy' ? 'medium' : difficulty === 'medium' ? 'hard' : 'challenging',  // Bump up difficulty
-          unit: `Session ${sessionId}`,
-          query: 'PSAC Grade 6-7 Advanced English',  // Advanced query
-          seed: Math.floor(Math.random() * 1000000),  // Random seed for variety
-          timestamp: timestamp,
-          session_id: sessionId
-        });
+        // Find your existing fetchQuiz call and update these fields:
+const backendQuiz = await fetchQuiz({
+  topic: `Advanced English - Session ${randomNum}`,  // Add session number
+  grade: 'Grade 6-7',
+  num_questions: QUESTIONS_PER_QUIZ,
+  skills: selectedSkills,  // Use the rotating skills instead of fixed ones
+  difficulty: difficulty === 'easy' ? 'medium' : difficulty === 'medium' ? 'hard' : 'challenging',
+  unit: null,
+  query: `PSAC Grade 6-7 Advanced English ${selectedSkills[0]}`,  // Include skill
+  seed: randomNum,
+  // timestamp and session_id are not part of the typed payload; handled server-side if needed
+});
         
-        console.log("📥 Frontend: Raw API response:", backendQuiz);
-        console.log("📊 Frontend: Response source:", backendQuiz.source);
-        console.log("📝 Frontend: Items received:", backendQuiz.items?.length || 0);
-        console.log("🎯 Frontend: First question preview:", backendQuiz.items?.[0]?.question?.substring(0, 60));
+        const typedBackendQuiz = backendQuiz as BackendQuizResponse;
+        console.log("📥 Frontend: Raw API response:", typedBackendQuiz);
+        console.log("📊 Frontend: Response source:", typedBackendQuiz.source);
+        console.log("📝 Frontend: Items received:", typedBackendQuiz.items?.length || 0);
+        console.log("🎯 Frontend: First question preview:", typedBackendQuiz.items?.[0]?.question?.substring(0, 60));
+        
+        // Repetition detection across runs: compare with last stored questions
+        try {
+          if (window.localStorage) {
+            const lastQuestions: string[] = JSON.parse(window.localStorage.getItem('last_quiz_questions') || '[]');
+            const currentQuestions: string[] = (typedBackendQuiz.items?.map((item: BackendQuizResponse['items'][number]) => String(item.question || '')) || []);
+            const hasRepetition = currentQuestions.some(q => lastQuestions.includes(q));
+            if (hasRepetition) {
+              console.error('🚨 REPETITION DETECTED! Questions are repeating.');
+            }
+            window.localStorage.setItem('last_quiz_questions', JSON.stringify(currentQuestions.slice(0, 3)));
+          }
+        } catch (e) {
+          console.warn('Repetition detection storage failed:', e);
+        }
         
         // Check if we got AI-generated questions
         if (backendQuiz.source === "llm" && backendQuiz.items && backendQuiz.items.length > 0) {
@@ -383,24 +413,53 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ difficulty, onProgress })
     onProgress(finalScore, sessionTime);
   };
 
-  const renderMultipleChoiceQuestion = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800">{currentQuestion.question}</h3>
-      <div className="space-y-3">
-        {currentQuestion.options?.map((option, index) => (
-          <Button
-            key={index}
-            variant={selectedAnswers[currentQuestionIndex] === option ? "default" : "outline"}
-            className="w-full justify-start text-left h-auto p-4"
-            onClick={() => handleMultipleChoiceAnswer(option)}
-          >
-            <span className="mr-3 font-medium">{String.fromCharCode(65 + index)}.</span>
-            {option}
-          </Button>
-        ))}
+  const renderMultipleChoiceQuestion = () => {
+    // Special handling for True/False questions
+    if (!currentQuestion.options || currentQuestion.options.length === 0) {
+      // If no options provided, create True/False options
+      const defaultOptions = currentQuestion.question.toLowerCase().includes('true or false') 
+        ? ['True', 'False'] 
+        : ['Yes', 'No'];
+      
+      return (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800">{currentQuestion.question}</h3>
+          <div className="space-y-3">
+            {defaultOptions.map((option, index) => (
+              <Button
+                key={index}
+                variant={selectedAnswers[currentQuestionIndex] === option ? "default" : "outline"}
+                className="w-full justify-start text-left h-auto p-4"
+                onClick={() => handleMultipleChoiceAnswer(option)}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+  
+    // Normal multiple choice rendering
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-800">{currentQuestion.question}</h3>
+        <div className="space-y-3">
+          {currentQuestion.options?.map((option, index) => (
+            <Button
+              key={index}
+              variant={selectedAnswers[currentQuestionIndex] === option ? "default" : "outline"}
+              className="w-full justify-start text-left h-auto p-4"
+              onClick={() => handleMultipleChoiceAnswer(option)}
+            >
+              <span className="mr-3 font-medium">{String.fromCharCode(65 + index)}.</span>
+              {option}
+            </Button>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderClozeQuestion = () => {
     const parts = currentQuestion.question.split('_____');

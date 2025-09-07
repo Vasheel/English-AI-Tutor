@@ -1,7 +1,7 @@
 # server/routes/quizzes.py - Enhanced with better variety and challenging questions
 from fastapi import APIRouter, HTTPException
 from openai import OpenAI
-import os, json, uuid, traceback, random, time
+import os, json, uuid, traceback, random, time, hashlib
 from ..structured_schema import QUIZ_RESPONSE_FORMAT
 from ..quiz_schema import GenerateQuizPayload, BackendQuizResponse, QuizItem
 
@@ -156,25 +156,29 @@ def generate_quiz(payload: GenerateQuizPayload):
         
         print(f"[DEBUG] Using random start pattern: {random_start}")
         
-        # ENHANCED system prompt for CHALLENGING questions
+        # ENHANCED system prompt for CHALLENGING questions (MCQ ONLY)
         system_prompt = (
             "You are a PSAC Grade 6 English quiz generator for ADVANCED students in Mauritius. "
             "Generate CHALLENGING questions that require critical thinking and deep understanding. "
-            "\n\nDIFFICULTY REQUIREMENTS:\n"
-            "- Questions should be at the UPPER END of Grade 6 level, preparing for Grade 7\n"
-            "- Include complex grammar structures, advanced vocabulary, and analytical thinking\n"
-            "- Avoid simple recall questions - focus on application and analysis\n"
-            "- Include distractors in options that are plausible but incorrect\n"
-            "\n\nVARIETY REQUIREMENTS:\n"
-            "- NEVER start with simple synonym questions like 'What is a synonym for happy?'\n"
-            "- Each quiz MUST begin with a DIFFERENT type of question\n"
-            "- Rotate between different skills and formats\n"
-            "- NO repetition of question patterns\n"
+            "\n\nCRITICAL FORMAT REQUIREMENT:\n"
+            "ALL questions MUST be in MULTIPLE CHOICE format with EXACTLY 4 options.\n"
+            "NEVER generate open-ended, analysis, or essay questions.\n"
+            "NEVER ask students to 'explain', 'analyze', or 'describe' without options.\n"
+            "ALWAYS provide 4 clickable options (A, B, C, D) for EVERY question.\n"
+            "\n\nEXAMPLES OF CORRECT MCQ FORMAT:\n"
+            "- 'Which word best describes the protagonist's emotional state?' + 4 options\n"
+            "- 'What can be inferred from this sentence?' + 4 options\n"
+            "- 'Choose the correct interpretation:' + 4 options\n"
+            "\n\nEXAMPLES OF WRONG FORMAT (DO NOT USE):\n"
+            "- 'Analyze the following sentence and explain...'\n"
+            "- 'Describe what can be inferred...'\n"
+            "- Any question without exactly 4 options\n"
             "\n\nReturn ONLY valid JSON in this exact format:\n"
-            '{"items": [{"id": "q1", "type": "mcq|fitb|true-false|short-answer", '
-            '"question": "UNIQUE challenging question", '
-            '"options": ["A", "B", "C", "D"], "answer": 0 or "text answer", '
-            '"explanation": "Detailed explanation"}]}'
+            '{"items": [{"id": "q1", "type": "mcq", '
+            '"question": "Question text with a clear prompt?", '
+            '"options": ["Option A", "Option B", "Option C", "Option D"], '
+            '"answer": 0, "explanation": "Explanation"}]}'
+            '\nEVERY item MUST have "type": "mcq" and exactly 4 options.'
         )
         
         # Create variety instructions with challenging focus
@@ -198,38 +202,39 @@ def generate_quiz(payload: GenerateQuizPayload):
                 )
             variety_instructions.append(instruction)
         
-        # Dynamic user prompt with strong emphasis on difficulty and variety
+        # Dynamic user prompt with strong emphasis on MCQ-only format
+        # Prepare dynamic identifiers for this request
+        timestamp = int(time.time())
+        session_id = uuid.uuid4().hex[:8]
+
         user_prompt = (
-            f"Generate EXACTLY {count} CHALLENGING questions for ADVANCED Grade 6 English students. "
-            f"Topic: {query_text} (Unit {unit}). Skills: {', '.join(skills)}. "
-            f"\n\nCRITICAL REQUIREMENTS:\n"
-            f"1. START with a {random_start} question - NOT a simple synonym question\n"
-            f"2. Make questions HARDER than typical Grade 6 level - think Grade 6/7 transition\n"
-            f"3. Question difficulty: mix medium-hard and hard questions\n"
-            f"\n\nVARIETY INSTRUCTIONS:\n"
-            + "\n".join(variety_instructions) +
-            f"\n\nEXAMPLE CHALLENGING QUESTIONS (use as inspiration):\n"
-            f"- 'Which sentence correctly uses the past perfect continuous tense?'\n"
-            f"- 'Identify the literary device: The stars danced playfully in the moonlit sky'\n"
-            f"- 'Choose the sentence with correct parallel structure'\n"
-            f"- 'What can be inferred about the character based on the context clues?'\n"
-            f"- 'Which word best replaces the underlined word without changing meaning?'\n"
-            f"- 'Identify the type of clause in the complex sentence'\n"
-            f"- 'Which sentence demonstrates the subjunctive mood?'\n"
-            f"\n\nAVOID THESE EASY PATTERNS:\n"
-            f"- Simple 'What is a synonym for X?' as ANY question, especially the first\n"
-            f"- Basic verb tenses like 'What is the past tense of go?'\n"
-            f"- Simple definitions like 'What is a noun?'\n"
-            f"- Questions a Grade 4 student could answer\n"
-            f"\n\nIMPORTANT RULES:\n"
-            f"1. NO two questions should have similar structure or wording\n"
-            f"2. Use DIFFERENT vocabulary in each question\n"
-            f"3. Each question must test a different aspect\n"
-            f"4. Include Mauritius-specific content where appropriate\n"
-            f"5. Questions should require reasoning, not just recall\n"
-            f"\n\nRandomization seed: {random.randint(100000, 999999)}\n"
-            f"Timestamp: {int(time.time())}\n"
-            f"Session ID: {uuid.uuid4().hex[:8]}"
+            f"Generate EXACTLY {count} MULTIPLE CHOICE questions (MCQ only!) for ADVANCED Grade 6 English students. "
+            f"Topic: {query_text}. Skills: {', '.join(skills)}. "
+            f"\n\nFORMAT REQUIREMENTS:\n"
+            f"1. EVERY question MUST be multiple choice with 4 options\n"
+            f"2. NEVER ask for written explanations or analysis\n"
+            f"3. Convert ANY question type to MCQ format:\n"
+            f"   - Instead of 'Analyze X', use 'Which best describes X?' with 4 options\n"
+            f"   - Instead of 'Explain Y', use 'What does Y mean?' with 4 options\n"
+            f"   - Instead of 'Describe Z', use 'Which statement about Z is correct?' with 4 options\n"
+            f"4. The 'type' field MUST always be 'mcq'\n"
+            f"5. The 'answer' field MUST be a number 0-3 (index of correct option)\n"
+            f"\n\nVARIETY INSTRUCTIONS:\n" + "\n".join(variety_instructions) +
+            f"\n\nDO NOT generate questions that ask students to write, type, or explain anything.\n"
+            f"ONLY generate questions where students click one of 4 options.\n"
+            f"\nRandomization: {random.randint(100000, 999999)}\n"
+            f"Timestamp: {timestamp}\n"
+            f"Session ID: {session_id}"
+        )
+
+        # Create a unique hash for this request to discourage repetition across runs
+        request_hash = hashlib.md5(f"{timestamp}{session_id}{random.random()}".encode()).hexdigest()[:8]
+        user_prompt += (
+            f"\n\nUNIQUE REQUEST ID: {request_hash}" 
+            f"\n\nAVOID these patterns from previous quizzes:" 
+            f"\n- Do NOT use 'ocean roared' or similar wave/water metaphors" 
+            f"\n- Do NOT ask about figurative language in nature descriptions" 
+            f"\n- Create COMPLETELY NEW question topics"
         )
         
         if payload.keywords:
@@ -249,7 +254,7 @@ def generate_quiz(payload: GenerateQuizPayload):
                 {"role": "user", "content": user_prompt}
             ],
             "temperature": 0.95,  # High for maximum variety
-            "max_tokens": 3000,   # Enough for detailed questions
+            "max_tokens": 4000,   # Enough for detailed questions
             "presence_penalty": 0.8,  # Strong penalty against repetition
             "frequency_penalty": 0.8,  # Encourage diverse vocabulary
             "top_p": 0.95  # Increase randomness
@@ -304,20 +309,29 @@ def generate_quiz(payload: GenerateQuizPayload):
         
         for i, q in enumerate(quiz_items):
             try:
-                # Ensure required fields
+                # Force MCQ type and normalize
                 q_id = q.get("id", f"ai_q_{i+1}")
-                q_type = q.get("type", "mcq")
+                q_type = "mcq"
                 question = q.get("question") or q.get("prompt", f"Question {i+1}")
-                
+                options = q.get("options", [])
+                if not options or len(options) < 4:
+                    print(f"[DEBUG] Question {i} missing options, skipping")
+                    continue
+                if len(options) > 4:
+                    options = options[:4]
+                while len(options) < 4:
+                    options.append(f"Option {len(options)+1}")
+
+                answer = q.get("answer", 0)
+                if not isinstance(answer, int) or answer < 0 or answer >= 4:
+                    answer = 0
+
                 # Skip if question is too similar to a previous one
                 question_key = question.lower().strip()[:50]
                 if question_key in seen_questions:
                     print(f"[DEBUG] Skipping duplicate question: {question[:50]}...")
                     continue
                 seen_questions.add(question_key)
-                
-                options = q.get("options", [])
-                answer = q.get("answer", 0)
                 explanation = q.get("explanation", "No explanation provided")
                 
                 item = QuizItem(

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { chat as chatApi } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import VoiceControls from './VoiceControls';
 import { Button } from "./ui/button";
 import { Loader2 } from "lucide-react";
@@ -16,7 +19,7 @@ interface ChatBotProps {
   model?: string;
 }
 
-const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are an English learning assistant. You help users improve their English skills by answering questions, correcting grammar, and providing explanations.", model = "gpt-3.5-turbo" }) => {
+const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are a PSAC (Primary School Achievement Certificate) Grade 6 English tutor for Mauritius. Always answer within the PSAC syllabus and exam style: clear explanations, age-appropriate vocabulary, short steps, and 1–2 PSAC-style examples. When users ask general questions, relate the answer to PSAC topics (grammar, vocabulary, comprehension, writing). If off‑syllabus, briefly redirect and connect to a relevant PSAC concept.", model = "gpt-3.5-turbo" }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -103,7 +106,15 @@ const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are an English le
 
   return (
     <div className="w-full max-w-3xl mx-auto p-4">
-      <div className="h-[600px] border rounded-lg overflow-y-auto p-4 bg-gray-50" id="chat-container">
+      <Card className="shadow-md">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xl">PSAC English Chat Tutor</CardTitle>
+            <Badge variant="outline">PSAC Mode</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+      <div className="h-[520px] border rounded-lg overflow-y-auto p-4 bg-gray-50" id="chat-container">
         {messages.map((message, index) => (
           <div
             key={index}
@@ -139,12 +150,11 @@ const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are an English le
       </div>
 
       <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
-        <input
+        <Input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 p-3 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+          placeholder="Ask a PSAC-style question (grammar, vocabulary, comprehension, writing)..."
           disabled={isLoading}
         />
         <Button 
@@ -161,7 +171,11 @@ const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are an English le
         </Button>
       </form>
 
-      <VoiceControls onSpeechInput={handleSpeechInput} />
+      <div className="mt-3">
+        <VoiceControls onSpeechInput={handleSpeechInput} />
+      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

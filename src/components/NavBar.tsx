@@ -16,6 +16,7 @@ const NavBar = () => {
     { path: "/adaptive-quiz", label: "Smart Quiz", icon: "🎯" },
     { path: "/image-quiz", label: "Image Quiz", icon: "🎨" },
     { path: "/progress", label: "Progress", icon: "📊" },
+    { path: "/chat", label: "PSAC Chat", icon: "💬" },
     { path: "/ai-demo", label: "AI Demo", icon: "🤖" },
   ];
 

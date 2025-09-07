@@ -6,20 +6,19 @@
 const API = import.meta.env.VITE_API_BASE ?? ""; // Use proxy in dev, env var in prod
 
 type GenerateQuizPayload = {
-    // Legacy shape support
-    topic?: string;
-    grade?: string;
-    num_questions?: number;
-    
-    // New shape
-    unit?: number | null;
-    skills?: string[];
-    count?: number;
-    difficulty?: string;
-    keywords?: string[];
-    query?: string | null;
-    seed?: number;
-  };
+  topic?: string;
+  grade?: string;
+  num_questions?: number;
+  skills?: string[];
+  count?: number;
+  difficulty?: string;
+  keywords?: string[];
+  query?: string;
+  seed?: number;
+  unit?: string | number | null;  // Changed to accept both string and number
+  timestamp?: number;
+  session_id?: string;
+};
   
   type AttemptPayload = {
     quiz_id: string;
