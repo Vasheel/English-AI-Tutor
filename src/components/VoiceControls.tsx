@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useControlledSpeechRecognition } from '@/hooks/useControlledSpeechRecognition';
 import { useNavigate } from 'react-router-dom';
 import fuzzysort from 'fuzzysort';
 import { Loader2 } from "lucide-react";
@@ -172,64 +173,12 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
   }, []);
 
 
-  useEffect(() => {
-  // bail out if browser doesn’t support it
-  if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
-    setError('Speech API not supported');
-    return;
-  }
-
-  // grab the constructor
-  const API = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!API) {
-  setError("Speech API not supported");
-  return;
-  }
-  // API is now correctly typed as `SpeechRecognitionConstructor`
-  const rec: SpeechRecognition = new API();
-  recognitionRef.current = rec;
-
-  rec.continuous = true;
-  rec.interimResults = true;
-  rec.lang = 'en-US';
-
-  rec.onresult = (event) => {
-    const full = Array.from(event.results)
-      .map(r => r[0].transcript)
-      .join('');
-    // final?
-    if (event.results[event.results.length - 1].isFinal) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      isGrammarSection
-        ? onSpeechInput(full)
-        : handleSpeechInput(full);
-    } else {
-      setTranscript(full);
-    }
-  };
-
-  rec.onerror = (ev: SpeechRecognitionErrorEvent) => {
-    console.error('SR error:', ev.error);
-    setError(ev.error);
-  };
-
-  rec.onend = () => {
-    // clear UI when engine stops
-    setTranscript('');
-    setIsListening(false);
-  };
-
-  // start listening
-  rec.start();
-  setIsListening(true);
-
-  // cleanup on unmount
-  return () => {
-    rec.stop();
-    recognitionRef.current = null;
-    setIsListening(false);
-  };
-}, [isGrammarSection, onSpeechInput, handleSpeechInput]);
+  const { isSupported, isListening: controlledListening, startListening, stopListening, toggleListening } = useControlledSpeechRecognition({
+    onResult: (text) => (isGrammarSection ? onSpeechInput(text) : handleSpeechInput(text)),
+    onError: (err) => setError(err),
+    language: 'en-US',
+    timeout: 8000
+  });
 
 
   
@@ -356,18 +305,8 @@ return (
 
       {/* Speak / Listening Toggle Button */}
       <SpeakButton
-        isListening={isListening}
-        onClick={() => {
-          const rec = recognitionRef.current;
-          if (!rec) return;
-          if (isListening) {
-            rec.stop();
-            setIsListening(false);
-          } else {
-            rec.start();
-            setIsListening(true);
-          }
-        }}
+        isListening={controlledListening}
+        onClick={toggleListening}
       />
     </div>
   </>
