@@ -12,6 +12,7 @@ const NavBar = () => {
     { path: "/exercise-generator", label: "Exercises", icon: "📝" },
     { path: "/games", label: "Games", icon: "🎮" },
     { path: "/reading", label: "Reading", icon: "📚" },
+    { path: "/cloze", label: "Cloze", icon: "✏️" },
     { path: "/quizzes", label: "Quizzes", icon: "📝" },
     { path: "/adaptive-quiz", label: "Smart Quiz", icon: "🎯" },
     { path: "/image-quiz", label: "Image Quiz", icon: "🎨" },

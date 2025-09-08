@@ -19,6 +19,8 @@ class QuizItem(BaseModel):
 class BackendQuizResponse(BaseModel):
     items: Optional[List[QuizItem]] = None
     source: Optional[str] = None
+    # Optional cloze payload for cloze generation requests
+    cloze: Optional[dict] = None
 
 
 class GenerateQuizPayload(BaseModel):
@@ -34,6 +36,10 @@ class GenerateQuizPayload(BaseModel):
     keywords: List[str] = Field(default_factory=list)
     query: Optional[str] = None
     seed: Optional[int] = None
+
+    # --- extensions for cloze and difficulty routing ---
+    type: Optional[str] = None  # 'mcq' | 'cloze'
+    difficulty: Optional[str] = None  # 'beginner' | 'intermediate' | 'advanced'
 
 
 class SaveQuizRequest(BaseModel):

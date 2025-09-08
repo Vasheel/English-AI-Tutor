@@ -23,6 +23,7 @@ import AIQuestionDemo from "@/components/AIQuestionDemo";
 import AdaptiveQuizSystem from "@/components/AdaptiveQuizSystem";
 import ImageQuiz from "@/pages/ImageQuiz";
 import DiagnosticPage from './pages/DiagnosticPage';
+import InteractiveClozeTestSystem from '@/components/InteractiveClozeTestSystem';
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,11 @@ const App = () => (
               <Route path="/reading" element={
                 <ProtectedRoute>
                   <ReadingPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/cloze" element={
+                <ProtectedRoute>
+                  <InteractiveClozeTestSystem />
                 </ProtectedRoute>
               } />
               <Route path="/quizzes" element={
@@ -106,7 +112,7 @@ const App = () => (
               } />
               <Route path="/image-quiz" element={
                 <ProtectedRoute>
-                  <ImageQuiz />
+                  <ImageQuiz imageUrl={""} correctKeywords={[]} />
                 </ProtectedRoute>
               } />
               <Route path="/diagnostic" element={<DiagnosticPage />} />

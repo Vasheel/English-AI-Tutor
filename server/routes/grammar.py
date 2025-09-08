@@ -100,9 +100,30 @@ def validate_context(student_text: str, image_metadata: Dict) -> Tuple[int, List
         return 100, [], True
     
     # Extract metadata
-    objects = image_metadata.get("objects", [])
-    actions = image_metadata.get("actions", [])
-    locations = image_metadata.get("locations", [])
+    objects = list(image_metadata.get("objects", []))
+    actions = list(image_metadata.get("actions", []))
+    locations = list(image_metadata.get("locations", []))
+
+    # Expand metadata from title/alt as a fallback (helps when lists are incomplete)
+    title_alt = f"{image_metadata.get('title','')} {image_metadata.get('alt','')}"
+    meta_words = re.findall(r"\b\w+\b", title_alt.lower())
+
+    action_keys = {
+        "play","run","walk","eat","sleep","read","cook","drive","swim","jump","sit","stand","hold","feed"
+    }
+    location_keys = {
+        "home","outside","inside","street","city","garden","kitchen","classroom","library","forest","field","beach","park","room","windowsill","chair"
+    }
+
+    for w in meta_words:
+        base = lemmatize_word(w)
+        if base in action_keys and base not in actions:
+            actions.append(base)
+        elif base in location_keys and base not in locations:
+            locations.append(base)
+        else:
+            if base not in objects and base not in action_keys and base not in location_keys and len(base) > 2:
+                objects.append(base)
     
     # Clean and lemmatize student text
     words = re.findall(r'\b\w+\b', student_text.lower())
@@ -113,38 +134,37 @@ def validate_context(student_text: str, image_metadata: Dict) -> Tuple[int, List
     action_matches = 0
     location_matches = 0
     
-    # Check objects
+    # Check objects (give credit for any one relevant object)
     for obj in objects:
         obj_synonyms = get_synonyms(obj)
-        for word in lemmatized_words:
-            if word in obj_synonyms:
-                object_matches += 1
-                break
+        if any(word in obj_synonyms for word in lemmatized_words):
+            object_matches += 1
+            break
     
-    # Check actions
+    # Check actions (sleeping/sleep etc.)
     for action in actions:
         action_synonyms = get_synonyms(action)
-        for word in lemmatized_words:
-            if word in action_synonyms:
-                action_matches += 1
-                break
+        if any(word in action_synonyms for word in lemmatized_words):
+            action_matches += 1
+            break
     
-    # Check locations
+    # Check locations (credit if any location term appears)
     for location in locations:
         location_synonyms = get_synonyms(location)
-        for word in lemmatized_words:
-            if word in location_synonyms:
-                location_matches += 1
-                break
+        if any(word in location_synonyms for word in lemmatized_words):
+            location_matches += 1
+            break
     
     # Calculate context score
+    # Score with softer thresholds; object OR action should be enough to pass
+    # Also reward close synonyms more than locations
     context_score = 0
     if object_matches > 0:
-        context_score += 60
+        context_score += 70
     if action_matches > 0:
-        context_score += 30
+        context_score += 25
     if location_matches > 0:
-        context_score += 10
+        context_score += 5
     
     # Generate hints
     hints = []
@@ -155,8 +175,8 @@ def validate_context(student_text: str, image_metadata: Dict) -> Tuple[int, List
     if location_matches == 0 and locations:
         hints.append(f"Consider mentioning where this is taking place. (Hint: {locations[0]})")
     
-    # Context passes if score >= 60 (at least one object mentioned)
-    context_passed = context_score >= 60
+    # Context passes if object OR action is present
+    context_passed = (object_matches > 0) or (action_matches > 0)
     
     return context_score, hints, context_passed
 

@@ -1,7 +1,7 @@
 # server/routes/quizzes.py - Enhanced with better variety and challenging questions
 from fastapi import APIRouter, HTTPException
 from openai import OpenAI
-import os, json, uuid, traceback, random, time, hashlib
+import os, json, uuid, traceback, random, time, hashlib, re
 from ..structured_schema import QUIZ_RESPONSE_FORMAT
 from ..quiz_schema import GenerateQuizPayload, BackendQuizResponse, QuizItem
 
@@ -147,6 +147,48 @@ def generate_quiz(payload: GenerateQuizPayload):
         except Exception as e:
             print(f"[DEBUG] RAG retrieval failed: {e}")
 
+    # If the client asked for a cloze test, produce a cloze object instead of MCQ
+    if (payload.type or "").lower() == "cloze":
+        try:
+            client = get_openai_client()
+            model, _ = resolve_model(client)
+            system = "You generate PSAC Grade 6 English CLOZE tests. Return ONLY strict JSON."
+            # Map difficulty names
+            diff = (payload.difficulty or "beginner").lower()
+            prompt = (
+                "Create ONE short cloze passage with 5-7 blanks. "
+                "Use everyday topics for beginner, school/science for intermediate, and abstract/current affairs for advanced.\n"
+                "Return JSON with keys: title, text, answers, topic.\n"
+                "- text: full passage where each blank is represented by 5 underscores (_____).\n"
+                "- answers: array of the missing words in order.\n"
+                f"Difficulty: {diff}."
+            )
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role":"system","content":system},{"role":"user","content":prompt}],
+                temperature=0.7,
+                response_format={"type":"json_object"}
+            )
+            raw = resp.choices[0].message.content or "{}"
+            data = json.loads(raw)
+            text = data.get("text") or data.get("passage")
+            answers = data.get("answers") or []
+            title = data.get("title") or "AI Cloze"
+            if not text or not answers:
+                raise ValueError("missing text/answers")
+            return BackendQuizResponse(
+                cloze={
+                    "title": title,
+                    "text": text,
+                    "answers": answers,
+                    "topic": data.get("topic", "AI Generated")
+                },
+                source="llm"
+            )
+        except Exception as e:
+            print(f"[DEBUG] Cloze generation failed: {e}")
+            # fallthrough to MCQ pipeline below as a backup
+
     # Prepare OpenAI request with enhanced variety and difficulty
     try:
         # Select random starting pattern to avoid repetition
@@ -253,11 +295,14 @@ def generate_quiz(payload: GenerateQuizPayload):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "temperature": 0.95,  # High for maximum variety
-            "max_tokens": 4000,   # Enough for detailed questions
-            "presence_penalty": 0.8,  # Strong penalty against repetition
-            "frequency_penalty": 0.8,  # Encourage diverse vocabulary
-            "top_p": 0.95  # Increase randomness
+            # Slightly lower temperature for better JSON stability while keeping variety
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "presence_penalty": 0.5,
+            "frequency_penalty": 0.5,
+            "top_p": 0.9,
+            # Force strict JSON response from the model
+            "response_format": {"type": "json_object"}
         }
         
         # Add seed if using newer OpenAI API
@@ -269,17 +314,31 @@ def generate_quiz(payload: GenerateQuizPayload):
         chat = client.chat.completions.create(**api_params)
         
         print("[DEBUG] OpenAI API call successful")
-        content = chat.choices[0].message.content.strip()
-        print(f"[DEBUG] Raw OpenAI response length: {len(content)}")
-        print(f"[DEBUG] Raw OpenAI response preview: {content[:300]}...")
-        
+        raw_content = (chat.choices[0].message.content or "").strip()
+        print(f"[DEBUG] Raw OpenAI response length: {len(raw_content)}")
+        print(f"[DEBUG] Raw OpenAI response preview: {raw_content[:300]}...")
+
+        # Sanitize common formatting issues (code fences, NBSP, stray chars)
+        content = raw_content.replace("\xa0", " ").replace("\u200b", "").replace("\ufeff", "").strip()
+        if content.startswith("```"):
+            fence_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", content)
+            if fence_match:
+                content = fence_match.group(1)
+
+        # Extract the largest JSON object if the model added extra text
+        obj_match = re.search(r"\{[\s\S]*\}\s*$", content)
+        if obj_match:
+            content_to_parse = obj_match.group(0)
+        else:
+            content_to_parse = content
+
         # Parse JSON response
         try:
-            data = json.loads(content)
+            data = json.loads(content_to_parse)
             print(f"[DEBUG] JSON parsing successful, keys: {list(data.keys())}")
         except json.JSONDecodeError as e:
-            print(f"[DEBUG] JSON parsing failed: {e}")
-            print(f"[DEBUG] Full content that failed: {repr(content)}")
+            print(f"[DEBUG] JSON parsing failed after sanitize: {e}")
+            print(f"[DEBUG] Full content that failed: {repr(content_to_parse)}")
             return create_challenging_fallback_response(count)
 
         # Extract quiz items
