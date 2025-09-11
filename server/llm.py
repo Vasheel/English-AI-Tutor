@@ -48,7 +48,7 @@ class LLMClient:
         timeout_s: float = 30.0,
         max_retries: int = 2,
     ):
-        self.model: str = model or os.getenv("MODEL_NAME", "gpt-4o-mini")
+        self.model: str = model or os.getenv("MODEL_NAME", "gpt-5")
         self.base_url: str = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.api_key: str = api_key or os.getenv("OPENAI_API_KEY", "")
         self.timeout_s: float = timeout_s
@@ -76,33 +76,43 @@ class LLMClient:
         max_tokens: Optional[int] = None,
     ) -> str:
         url = f"{self.base_url.rstrip('/')}/chat/completions"
-        payload: dict = {
-            "model": self.model,
+        # Prepare model fallback chain. You can override with FALLBACK_MODELS env (comma-separated)
+        fallback_env = os.getenv("FALLBACK_MODELS", "gpt-4o-mini,gpt-4o,gpt-3.5-turbo")
+        fallback_models = [m.strip() for m in fallback_env.split(",") if m.strip()]
+        models_to_try: List[str] = [self.model] + [m for m in fallback_models if m != self.model]
+
+        payload_base: dict = {
             "messages": messages,
             "temperature": temperature,
         }
         if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
+            payload_base["max_tokens"] = max_tokens
 
-        # Basic retry for 429/5xx
         last_err: Optional[Exception] = None
-        for attempt in range(self.max_retries + 1):
-            try:
-                resp = self._session.post(url, json=payload, timeout=self.timeout_s)
-                if resp.status_code in (429, 500, 502, 503, 504):
-                    raise RuntimeError(f"LLM HTTP {resp.status_code}: {resp.text[:200]}")
-                resp.raise_for_status()
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"]
-                return content.strip()
-            except Exception as e:
-                last_err = e
-                # small backoff
-                if attempt < self.max_retries:
-                    time.sleep(0.7 * (attempt + 1))
-                else:
-                    break
-        # Surface useful error
+        for model_name in models_to_try:
+            payload = {**payload_base, "model": model_name}
+            for attempt in range(self.max_retries + 1):
+                try:
+                    resp = self._session.post(url, json=payload, timeout=self.timeout_s)
+                    if resp.status_code in (429, 500, 502, 503, 504):
+                        raise RuntimeError(f"LLM HTTP {resp.status_code}: {resp.text[:200]}")
+                    resp.raise_for_status()
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"]
+                    if model_name != self.model:
+                        print(f"[LLM] Fallback model in use: {model_name}")
+                    return content.strip()
+                except Exception as e:
+                    last_err = e
+                    # If it's a 400/Bad Request (often wrong/unknown model), try next model immediately
+                    err_text = str(e)
+                    if "400" in err_text or "Bad Request" in err_text:
+                        break  # try next model_name
+                    # small backoff then retry same model
+                    if attempt < self.max_retries:
+                        time.sleep(0.7 * (attempt + 1))
+                    else:
+                        break
         raise RuntimeError(f"LLM chat failed after retries: {last_err}")
 
 # Optional helper if you want a one-shot quiz generator from plain text

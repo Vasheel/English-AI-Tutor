@@ -24,6 +24,9 @@ import AdaptiveQuizSystem from "@/components/AdaptiveQuizSystem";
 import ImageQuiz from "@/pages/ImageQuiz";
 import DiagnosticPage from './pages/DiagnosticPage';
 import InteractiveClozeTestSystem from '@/components/InteractiveClozeTestSystem';
+import SentenceBuilderWithWhisper from '@/components/games/SentenceBuilderWithWhisper';
+import EnvTest from '@/components/EnvTest';
+import WhisperDebugTest from '@/components/WhisperDebugTest';
 
 const queryClient = new QueryClient();
 
@@ -97,11 +100,14 @@ const App = () => (
                   <AIQuestionDemo />
                 </ProtectedRoute>
               } />
+
+<Route path="/debug-whisper" element={<WhisperDebugTest />} />
+
               <Route path="/chat" element={
                 <ProtectedRoute>
                   <ChatBot 
                     systemPrompt="You are a PSAC (Primary School Achievement Certificate) Grade 6 English tutor for Mauritius. Always answer within the PSAC syllabus and exam style: clear explanations, age-appropriate vocabulary, short steps, and 1–2 PSAC-style examples. When users ask general questions, relate the answer to PSAC topics (grammar, vocabulary, comprehension, writing). If off‑syllabus, briefly redirect and connect to a relevant PSAC concept." 
-                    model="gpt-3.5-turbo"
+                    model={(import.meta.env.VITE_CHAT_MODEL as string) || "gpt-5"}
                   />
                 </ProtectedRoute>
               } />
@@ -116,6 +122,12 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/diagnostic" element={<DiagnosticPage />} />
+              <Route path="/sentence-builder" element={
+                <ProtectedRoute>
+                  <SentenceBuilderWithWhisper />
+                </ProtectedRoute>
+              } />
+              <Route path="/env-test" element={<EnvTest />} />
                          
 
               <Route path="*" element={<NotFound />} />

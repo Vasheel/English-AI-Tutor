@@ -5,29 +5,19 @@ import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
 import { useSessionTimer } from "@/hooks/useSessionTimer";
-import { useAdaptiveDifficulty, AIQuestion } from "@/hooks/useAdaptiveDifficulty";
-import { psacVocabulary, generateGrammarQuestion } from '../psacVocabulary.ts';
+import { useAdaptiveDifficulty } from "@/hooks/useAdaptiveDifficulty";
 import { 
   getRandomWord, 
-  getRandomGrammarQuestion, 
   resetUsedContent,
   getUsageStats 
 } from '@/utils/dynamicContentGenerator';
 import { 
   generateAIWordScramble, 
-  generateAIQuestions, 
   clearAICache,
   getAICacheStats 
 } from '@/utils/aiQuestionGenerator';
 
-type QuizType = {
-  question: string;
-  options: string[];
-  answer: string;
-};
-
 const WordScramble = () => {
-  const [currentQuiz, setCurrentQuiz] = useState<QuizType | null>(null);
   const [currentWord, setCurrentWord] = useState(null);
   const [scrambledWord, setScrambledWord] = useState("");
   const [userAnswer, setUserAnswer] = useState("");
@@ -38,8 +28,6 @@ const WordScramble = () => {
   const [sessionStartTime, setSessionStartTime] = useState(Date.now());
   const [hintsUsed, setHintsUsed] = useState(0);
   const [showHint, setShowHint] = useState(false);
-  const [aiQuestion, setAiQuestion] = useState<AIQuestion | null>(null);
-  const [aiQuestionLoading, setAiQuestionLoading] = useState(false);
 
   // Use a ref to store the current word so voice recognition can access the latest value
   const currentWordRef = useRef(null);
@@ -59,8 +47,6 @@ const WordScramble = () => {
     startQuestionTimer,
     getElapsedTime,
     updateStudentProgress,
-    generateAIQuestion,
-    getCachedQuestion,
     loading: adaptiveLoading
   } = useAdaptiveDifficulty('word_scramble');
 
@@ -100,64 +86,8 @@ const WordScramble = () => {
     startQuestionTimer();
     questionStartTimeRef.current = Date.now();
     
-    // Generate AI questions for grammar and vocabulary
-    setAiQuestionLoading(true);
-    try {
-      // Generate AI grammar questions
-      const aiQuestions = await generateAIQuestions(
-        currentDifficulty === 1 ? 'easy' : currentDifficulty === 2 ? 'medium' : 'hard',
-        'grammar',
-        1
-      );
-      
-      if (aiQuestions.length > 0) {
-        const aiQuestion = aiQuestions[0];
-        setCurrentQuiz({
-          question: aiQuestion.question,
-          options: aiQuestion.options || [],
-          answer: aiQuestion.correctAnswer
-        });
-      } else {
-        // Fallback to static grammar question
-        setCurrentQuiz(getRandomGrammarQuestion(rawWord));
-      }
-      
-      // Generate AI vocabulary question
-      const vocabQuestions = await generateAIQuestions(
-        currentDifficulty === 1 ? 'easy' : currentDifficulty === 2 ? 'medium' : 'hard',
-        'vocabulary',
-        1
-      );
-      
-      if (vocabQuestions.length > 0) {
-        const vocabQuestion = vocabQuestions[0];
-        setAiQuestion({
-          question: vocabQuestion.question,
-          options: vocabQuestion.options || [],
-          answer: vocabQuestion.correctAnswer,
-          explanation: vocabQuestion.explanation
-        });
-      } else {
-        // Fallback to cached question
-        const cachedQuestion = await getCachedQuestion(currentDifficulty);
-        if (cachedQuestion) {
-          setAiQuestion(cachedQuestion);
-        }
-      }
-    } catch (error) {
-      console.error('Error generating AI questions:', error);
-      // Fallback to static content
-      setCurrentQuiz(getRandomGrammarQuestion(rawWord));
-      const cachedQuestion = await getCachedQuestion(currentDifficulty);
-      if (cachedQuestion) {
-        setAiQuestion(cachedQuestion);
-      }
-    } finally {
-      setAiQuestionLoading(false);
-    }
-    
     playSound("click");
-  }, [playSound, currentDifficulty, startQuestionTimer, getCachedQuestion, generateAIQuestion]);
+  }, [playSound, currentDifficulty, startQuestionTimer]);
 
   const updateProgressData = useCallback(async (correct: boolean) => {
     const currentProgress = getProgressByType('word_scramble');
@@ -393,50 +323,7 @@ const WordScramble = () => {
         </div>
       </div>
       
-      {/* AI Generated Question */}
-      {aiQuestion && !aiQuestionLoading && (
-        <div className="bg-blue-50 p-3 rounded mb-4">
-          <div className="font-semibold mb-2 text-blue-800">🧠 AI Challenge (Level {currentDifficulty}):</div>
-          <div className="mb-2 text-sm">{aiQuestion.question}</div>
-          {aiQuestion.options && (
-            <div className="space-y-1">
-              {aiQuestion.options.map((option, idx) => (
-                <div key={idx} className="text-xs text-gray-700">
-                  {String.fromCharCode(65 + idx)}. {option}
-                </div>
-              ))}
-            </div>
-          )}
-          {aiQuestion.explanation && (
-            <div className="text-xs text-blue-600 mt-2">
-              💡 {aiQuestion.explanation}
-            </div>
-          )}
-        </div>
-      )}
-
-      {aiQuestionLoading && (
-        <div className="bg-blue-50 p-3 rounded mb-4">
-          <div className="flex items-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="text-sm text-blue-800">Generating AI question...</span>
-          </div>
-        </div>
-      )}
       
-      {currentQuiz ? (
-        <div className="bg-yellow-100 p-3 rounded mb-4">
-          <div className="font-semibold mb-2">🧠 Grammar Check:</div>
-          <div className="mb-2">{currentQuiz.question || "No question available."}</div>
-          <ul className="list-disc list-inside">
-            {(currentQuiz.options || []).map((opt, idx) => (
-              <li key={idx}>{opt}</li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <div className="text-sm text-gray-500 italic mb-4">Loading quiz...</div>
-      )}
 
       <div className="flex gap-2 mb-4">
         <button

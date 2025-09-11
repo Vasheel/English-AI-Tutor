@@ -31,6 +31,7 @@ const GrammarCorrector = () => {
   const [corrected, setCorrected] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [semanticWarnings, setSemanticWarnings] = useState<string[]>([]);
 
 
   const [grammarResult, setGrammarResult] = useState<GrammarResponse | null>(null);
@@ -71,10 +72,18 @@ const GrammarCorrector = () => {
     setCorrected("");
     setError("");
     setCorrections([]);
+    setSemanticWarnings([]);
 
     try {
       const data: GrammarEvaluateResponse = await evaluateGrammar({ text: input });
       setGrammarResult(data as unknown as GrammarResponse);
+      // Compute soft semantic warnings (e.g., pronoun–noun gender mismatch)
+      try {
+        const textForAnalysis = (data as any)?.corrected || input;
+        setSemanticWarnings(getSemanticWarnings(textForAnalysis));
+      } catch (_) {
+        // ignore semantic analysis errors
+      }
       setCorrected("");
     } catch (err) {
       console.error("Grammar correction error:", err);
@@ -99,6 +108,31 @@ const GrammarCorrector = () => {
 
     setLoading(false);
   };
+
+  function getSemanticWarnings(text: string): string[] {
+    const t = (text || "").toLowerCase();
+    const warnings: string[] = [];
+
+    const containsAny = (words: string[]) => words.some(w => new RegExp(`\\b${w}\\b`).test(t));
+
+    const mascPronouns = ["he", "him", "his"]; // simple set
+    const femPronouns = ["she", "her", "hers"]; // simple set
+
+    const maleNouns = [
+      "man","boy","father","brother","uncle","king","actor","waiter","policeman","businessman","gentleman","husband","son"
+    ];
+    const femaleNouns = [
+      "woman","girl","mother","sister","aunt","queen","actress","waitress","policewoman","businesswoman","lady","wife","daughter"
+    ];
+
+    if (containsAny(femPronouns) && containsAny(maleNouns)) {
+      warnings.push("Pronoun–noun mismatch: feminine pronoun with a male noun (meaning issue).");
+    }
+    if (containsAny(mascPronouns) && containsAny(femaleNouns)) {
+      warnings.push("Pronoun–noun mismatch: masculine pronoun with a female noun (meaning issue).");
+    }
+    return warnings;
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -237,6 +271,20 @@ const GrammarCorrector = () => {
             </div>
             {renderDiff(grammarResult.diff)}
           </div>
+
+          {semanticWarnings.length > 0 && (
+            <div className="p-4 bg-orange-50 border border-orange-300 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-5 w-5 text-orange-600" />
+                <strong className="text-orange-800">Semantic Note (not a grammar error):</strong>
+              </div>
+              <ul className="list-disc list-inside text-sm text-orange-900">
+                {semanticWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
 
 

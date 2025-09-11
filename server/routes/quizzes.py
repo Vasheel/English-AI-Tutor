@@ -65,7 +65,7 @@ def get_openai_client() -> OpenAI:
     return OpenAI(api_key=api_key)
 
 def resolve_model(client: OpenAI) -> tuple[str, str]:
-    configured = os.getenv("MODEL_NAME", "gpt-4o-mini")
+    configured = os.getenv("MODEL_NAME", "gpt-5")
     print(f"[DEBUG] Configured model: {configured}")
     
     try:

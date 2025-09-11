@@ -189,6 +189,38 @@ def score_and_tags(orig: str, corrected: str):
     score = max(0, 100 - penalties)
     return score, tags
 
+def semantic_consistency_checks(text: str) -> Tuple[List[str], int]:
+    """Return warnings and a suggested penalty (0-30) for meaning issues.
+    Currently checks simple pronoun–gendered-noun mismatches.
+    """
+    t = (text or "").lower()
+    warnings: List[str] = []
+
+    def contains_any(words: List[str]) -> bool:
+        return any(re.search(rf"\b{re.escape(w)}\b", t) for w in words)
+
+    masc_pronouns = ["he", "him", "his"]
+    fem_pronouns = ["she", "her", "hers"]
+
+    male_nouns = [
+        "man","boy","father","brother","uncle","king","actor","waiter","policeman","businessman","gentleman","husband","son"
+    ]
+    female_nouns = [
+        "woman","girl","mother","sister","aunt","queen","actress","waitress","policewoman","businesswoman","lady","wife","daughter"
+    ]
+
+    penalty = 0
+    if contains_any(fem_pronouns) and contains_any(male_nouns):
+        warnings.append("Pronoun–noun mismatch: feminine pronoun with a male noun (meaning issue).")
+        penalty += 20
+    if contains_any(masc_pronouns) and contains_any(female_nouns):
+        warnings.append("Pronoun–noun mismatch: masculine pronoun with a female noun (meaning issue).")
+        penalty += 20
+
+    # Cap penalty to avoid overpowering grammar score
+    penalty = min(penalty, 30)
+    return warnings, penalty
+
 @router.post("/evaluate")
 def evaluate(req: EvalRequest):
     # Stage A: Grammar Correction
@@ -207,12 +239,58 @@ def evaluate(req: EvalRequest):
     )
     corrected = resp.choices[0].message.content.strip()
     
-    # Generate grammar diff
-    diff_list = list(ndiff(req.text.split(), corrected.split()))
-    diff = [{"op":"replace" if x.startswith(('-','+')) else "equal","token":x[2:]} for x in diff_list]
-    
-    # Calculate grammar score
+    # Calculate grammar score (initial, before any semantic rewrite)
     grammar_score, tags = score_and_tags(req.text, corrected)
+
+    # Stage A2: Semantic consistency (affects score regardless of image context)
+    sem_warnings, sem_penalty = semantic_consistency_checks(corrected)
+    if sem_warnings:
+        # augment tags and apply penalty later to final score
+        try:
+            tags["Semantics"] = tags.get("Semantics", 0) + len(sem_warnings)  # type: ignore
+        except Exception:
+            pass
+    
+    # Optional: rewrite gendered nouns to match pronouns
+    def _preserve_case(src: str, dst: str) -> str:
+        return dst.capitalize() if src[:1].isupper() else dst
+
+    MALE_TO_FEMALE = {
+        "man": "woman",
+        "boy": "girl",
+        "father": "mother",
+        "brother": "sister",
+        "uncle": "aunt",
+        "king": "queen",
+        "actor": "actress",
+        "waiter": "waitress",
+        "policeman": "policewoman",
+        "businessman": "businesswoman",
+        "gentleman": "lady",
+        "husband": "wife",
+        "son": "daughter",
+    }
+    FEMALE_TO_MALE = {v: k for k, v in MALE_TO_FEMALE.items()}
+
+    lower_txt = corrected.lower()
+    has_fem_pronoun = any(re.search(rf"\b{p}\b", lower_txt) for p in ["she", "her", "hers"])
+    has_masc_pronoun = any(re.search(rf"\b{p}\b", lower_txt) for p in ["he", "him", "his"])
+
+    rewrite_note = None
+    if has_fem_pronoun:
+        for male, female in MALE_TO_FEMALE.items():
+            if re.search(rf"\b{male}\b", lower_txt):
+                corrected = re.sub(rf"\b{male}\b", lambda m: _preserve_case(m.group(0), female), corrected, flags=re.IGNORECASE)
+                rewrite_note = f"Adjusted noun to match pronoun: {male} → {female}."
+                sem_penalty = 0
+                break
+    elif has_masc_pronoun:
+        for female, male in FEMALE_TO_MALE.items():
+            if re.search(rf"\b{female}\b", lower_txt):
+                corrected = re.sub(rf"\b{female}\b", lambda m: _preserve_case(m.group(0), male), corrected, flags=re.IGNORECASE)
+                rewrite_note = f"Adjusted noun to match pronoun: {female} → {male}."
+                sem_penalty = 0
+                break
     
     # Stage B: Context Validation (if image_id provided)
     context_score = 100
@@ -240,7 +318,17 @@ def evaluate(req: EvalRequest):
                 # Context failed - cap the score
                 final_score = min(grammar_score, 80)  # Max 80 if context fails
     
-    explanations = context_hints  # Use context hints as explanations
+    # Apply semantic penalty after combining with context
+    if sem_penalty:
+        final_score = max(0, final_score - sem_penalty)
+
+    # Generate diff AFTER potential rewrite
+    diff_list = list(ndiff(req.text.split(), corrected.split()))
+    diff = [{"op":"replace" if x.startswith(('-','+')) else "equal","token":x[2:]} for x in diff_list]
+
+    explanations = context_hints + sem_warnings  # Include semantic notes
+    if rewrite_note:
+        explanations.append(rewrite_note)
     
     return {
         "corrected": corrected, 
