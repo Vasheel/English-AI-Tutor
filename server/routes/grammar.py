@@ -166,28 +166,97 @@ def validate_context(student_text: str, image_metadata: Dict) -> Tuple[int, List
     if location_matches > 0:
         context_score += 5
     
-    # Generate hints
+    # Generate detailed feedback
     hints = []
+    feedback_parts = []
+    
+    # Object feedback
     if object_matches == 0 and objects:
         hints.append(f"Your sentence doesn't mention the main subject I see. Try including it. (Hint: {objects[0]})")
+        feedback_parts.append(f"Missing main subject: {objects[0]}")
+    elif object_matches > 0:
+        feedback_parts.append(f"✓ Good job mentioning the subject!")
+    
+    # Action feedback
     if action_matches == 0 and actions:
         hints.append(f"Try describing what's happening. (Hint: {actions[0]})")
+        feedback_parts.append(f"Missing action: {actions[0]}")
+    elif action_matches > 0:
+        feedback_parts.append(f"✓ Good job describing the action!")
+    
+    # Location feedback
     if location_matches == 0 and locations:
         hints.append(f"Consider mentioning where this is taking place. (Hint: {locations[0]})")
+        feedback_parts.append(f"Missing location: {locations[0]}")
+    elif location_matches > 0:
+        feedback_parts.append(f"✓ Good job mentioning the location!")
+    
+    # Add overall context score explanation
+    if context_score < 100:
+        missing_elements = []
+        if object_matches == 0 and objects:
+            missing_elements.append("main subject")
+        if action_matches == 0 and actions:
+            missing_elements.append("action")
+        if location_matches == 0 and locations:
+            missing_elements.append("location")
+        
+        if missing_elements:
+            feedback_parts.append(f"Context score {context_score}%: You missed {', '.join(missing_elements)}")
+        else:
+            feedback_parts.append(f"Context score {context_score}%: Good description!")
+    else:
+        feedback_parts.append("Context score 100%: Excellent description!")
     
     # Context passes if object OR action is present
     context_passed = (object_matches > 0) or (action_matches > 0)
     
-    return context_score, hints, context_passed
+    return context_score, hints, context_passed, feedback_parts
 
 def score_and_tags(orig: str, corrected: str):
-    # toy scoring just to unblock you
+    # Enhanced scoring that recognizes valid variations
     tags = {"SVA":0,"Article":0,"Spelling":0,"Punctuation":0,"Tense":0,"WordChoice":0}
     penalties = 0
+    
+    # Check if the "correction" is actually just a valid alternative
+    orig_lower = orig.lower().strip()
+    corrected_lower = corrected.lower().strip()
+    
+    # If they're essentially the same (just word order differences), give full score
+    if are_equivalent_sentences(orig_lower, corrected_lower):
+        return 100, tags
+    
+    # Standard penalties
     if orig and orig[0].islower(): tags["Punctuation"] += 1; penalties += 5
     if not orig.strip().endswith((".", "!", "?")): tags["Punctuation"] += 1; penalties += 5
     score = max(0, 100 - penalties)
     return score, tags
+
+def are_equivalent_sentences(sent1: str, sent2: str) -> bool:
+    """Check if two sentences are equivalent (same words, possibly different order)"""
+    import re
+    
+    # Remove punctuation and split into words
+    words1 = set(re.findall(r'\b\w+\b', sent1.lower()))
+    words2 = set(re.findall(r'\b\w+\b', sent2.lower()))
+    
+    # If they have the same words, they're equivalent
+    if words1 == words2:
+        return True
+    
+    # Check for common adverb placement variations
+    # Remove adverbs and check if the rest is the same
+    adverbs = ['carefully', 'quickly', 'slowly', 'quietly', 'loudly', 'gently', 'easily', 'hardly', 'really', 'very', 'quite', 'rather', 'pretty', 'fairly', 'somewhat', 'extremely', 'completely', 'totally', 'absolutely', 'definitely', 'certainly', 'probably', 'possibly', 'maybe', 'perhaps', 'surely', 'obviously', 'clearly', 'naturally', 'normally', 'usually', 'often', 'sometimes', 'rarely', 'never', 'always', 'frequently', 'occasionally', 'regularly', 'constantly', 'continuously', 'immediately', 'instantly', 'suddenly', 'gradually', 'eventually', 'finally', 'ultimately', 'initially', 'originally', 'previously', 'recently', 'lately', 'currently', 'presently', 'meanwhile', 'simultaneously', 'concurrently', 'subsequently', 'consequently', 'therefore', 'thus', 'hence', 'accordingly', 'consequently', 'moreover', 'furthermore', 'additionally', 'besides', 'however', 'nevertheless', 'nonetheless', 'still', 'yet', 'though', 'although', 'despite', 'in spite of', 'regardless', 'irrespective', 'notwithstanding']
+    
+    # Remove adverbs from both sentences
+    words1_no_adv = words1 - set(adverbs)
+    words2_no_adv = words2 - set(adverbs)
+    
+    # If they're the same without adverbs, they're equivalent
+    if words1_no_adv == words2_no_adv:
+        return True
+    
+    return False
 
 def semantic_consistency_checks(text: str) -> Tuple[List[str], int]:
     """Return warnings and a suggested penalty (0-30) for meaning issues.
@@ -228,7 +297,9 @@ def evaluate(req: EvalRequest):
         "You correct English sentences for Grade 6. "
         f"Use {req.dialect} spelling. "
         "When mode='minimal', make the smallest edits that fix grammar/punctuation. "
-        "Keep the student's voice."
+        "Keep the student's voice. "
+        "IMPORTANT: For adverb placement, both positions are often correct (e.g., 'She carefully reads' and 'She reads carefully' are both valid). "
+        "Only correct if there's a clear grammatical error, not just different but valid word order."
     )
     user = f"Original: {req.text}\nMode: {req.mode}\nGrade: {req.grade_level}\nReturn only the corrected sentence."
     resp = client.chat.completions.create(
@@ -308,7 +379,7 @@ def evaluate(req: EvalRequest):
                 break
         
         if image_metadata:
-            context_score, context_hints, context_passed = validate_context(corrected, image_metadata)
+            context_score, context_hints, context_passed, context_feedback = validate_context(corrected, image_metadata)
             
             # Adjust final score based on context
             if context_passed:
@@ -330,10 +401,14 @@ def evaluate(req: EvalRequest):
     if rewrite_note:
         explanations.append(rewrite_note)
     
+    # Combine context feedback with explanations
+    all_feedback = explanations + context_feedback
+    
     return {
         "corrected": corrected, 
         "diff": diff, 
-        "explanations": explanations,
+        "explanations": all_feedback,
+        "context_feedback": context_feedback,  # Separate detailed context feedback
         "score": final_score, 
         "tags": tags, 
         "confidence": "medium",

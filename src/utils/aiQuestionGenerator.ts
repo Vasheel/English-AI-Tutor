@@ -26,7 +26,7 @@ const wordCache = new Map<string, AIWordScrambleQuestion[]>();
 export const generateAIQuestions = async (
   difficulty: 'easy' | 'medium' | 'hard',
   category: 'grammar' | 'vocabulary' | 'comprehension',
-  count: number = 3,
+  count: number = 5,
   maxRetries: number = 3
 ): Promise<AIQuestion[]> => {
   const cacheKey = `${difficulty}-${category}-${count}`;

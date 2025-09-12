@@ -6,50 +6,47 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { CheckCircle, XCircle, Mic, MicOff, RotateCcw, Lightbulb, Volume2 } from 'lucide-react';
+import { CheckCircle, XCircle, Mic, MicOff, RotateCcw, Lightbulb, Volume2, BarChart3, Shuffle } from 'lucide-react';
 import { useWhisperVoiceRecognition } from '@/hooks/useWhisperVoiceRecognition';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useSessionTimer } from '@/hooks/useSessionTimer';
 import { useToast } from '@/hooks/use-toast';
 import { resumeAudioContext } from '@/utils/audioContext';
+import { sentenceDatabase, getRandomSentence, Sentence } from '@/data/sentences';
+import { useStudentProgress } from '@/hooks/useStudentProgress';
+import { ProgressDashboard } from '@/components/ProgressCircle';
 
 interface Word {
   id: string;
   text: string;
 }
 
-interface Sentence {
-  words: string[];
-  correct: string;
-}
+// Remove the local Sentence interface since we're importing it from the database
 
 const SentenceBuilderWithWhisper: React.FC = () => {
   const { toast } = useToast();
   
-  const sentences: Sentence[] = [
-    { 
-      words: ["The", "cat", "is", "sleeping"],
-      correct: "The cat is sleeping."
-    },
-    { 
-      words: ["Birds", "fly", "in", "the", "sky"],
-      correct: "Birds fly in the sky."
-    },
-    { 
-      words: ["I", "like", "to", "read", "books"],
-      correct: "I like to read books."
-    },
-    { 
-      words: ["She", "plays", "with", "her", "dog"],
-      correct: "She plays with her dog."
-    },
-    { 
-      words: ["We", "go", "to", "school", "every", "day"],
-      correct: "We go to school every day."
-    }
-  ];
-
-  const [currentSentence, setCurrentSentence] = useState(sentences[0]);
+  // Add this ref at the top of your component:
+  const previousBadges = useRef<string[]>([]);
+  const previousLevel = useRef<string>('');
+  
+  // Initialize with student progress tracking
+  const {
+    progress,
+    currentSentence,
+    recordAttempt,
+    getProgressMetrics,
+    nextSentence: hookNextSentence,
+    isSentenceCompleted,
+    setAttemptStartTime,
+    updateStudentProgress,
+    forceResetAllData
+  } = useStudentProgress();
+  
+  // State for difficulty selection and UI
+  const [selectedDifficulty, setSelectedDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
+  const [showProgress, setShowProgress] = useState(false);
+  const [attemptStartTime, setAttemptStartTimeLocal] = useState<number>(0);
   const [availableWords, setAvailableWords] = useState<Word[]>([]);
   const [sentenceSlots, setSentenceSlots] = useState<(Word | null)[]>([]);
   const [draggedWord, setDraggedWord] = useState<Word | null>(null);
@@ -59,6 +56,59 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   const [isComplete, setIsComplete] = useState(false);
   const [showHint, setShowHint] = useState(false);
   
+  // Initialize current sentence if not set
+  useEffect(() => {
+    if (!currentSentence) {
+      const initialSentence = getRandomSentence(selectedDifficulty);
+      hookNextSentence(initialSentence);
+    }
+  }, [currentSentence, selectedDifficulty, hookNextSentence]);
+
+  // Add this useEffect to show badge notifications:
+  useEffect(() => {
+    const newBadges = progress.badges.filter(badge => 
+      !previousBadges.current.includes(badge)
+    );
+    
+    newBadges.forEach(badge => {
+      const getBadgeName = (badge: string) => {
+        switch (badge) {
+          case 'streak_5': return '5 Streak Master! 🔥';
+          case 'streak_10': return '10 Streak Legend! ⚡';
+          case 'completion_10': return '10 Sentences Completed! 🎯';
+          case 'accuracy_90': return '90% Accuracy Expert! 🏆';
+          default: return 'New Achievement! ⭐';
+        }
+      };
+      
+      toast({
+        title: "🏆 New Achievement!",
+        description: getBadgeName(badge),
+        duration: 4000,
+      });
+    });
+    
+    previousBadges.current = progress.badges;
+  }, [progress.badges, toast]);
+
+  // Add this useEffect to notify about level changes:
+  useEffect(() => {
+    if (previousLevel.current && previousLevel.current !== progress.currentLevel) {
+      const levelUpMessage = progress.currentLevel === 'intermediate' 
+        ? "🎉 Leveled up to Medium! Sentences are getting more challenging!"
+        : progress.currentLevel === 'advanced'
+        ? "🚀 Amazing! You've reached Hard level! Expert sentences ahead!"
+        : "📚 Back to easier sentences. Take your time!";
+      
+      toast({
+        title: "Level Change!",
+        description: levelUpMessage,
+        duration: 3000,
+      });
+    }
+    previousLevel.current = progress.currentLevel;
+  }, [progress.currentLevel, toast]);
+
   // Add a ref to always point to the latest currentSentence
   const currentSentenceRef = useRef(currentSentence);
   useEffect(() => {
@@ -91,51 +141,52 @@ const SentenceBuilderWithWhisper: React.FC = () => {
 
   // Wrap startListening to lock the sentence
   const startListening = async () => {
-    // Resume audio context before starting
     await resumeAudioContext();
-    
+    setAttemptStartTime(Date.now()); // Start timing
     listeningSentenceRef.current = currentSentenceRef.current;
     origStartListening();
   };
   // Use the ref in processVoiceInput
   const processVoiceInput = (transcript: string) => {
-    setLastTranscript(transcript); // Show transcript to user
+    setLastTranscript(transcript);
     
-    // Clean up the transcript
-    const cleanTranscript = transcript.toLowerCase().trim();
+    const timeToComplete = (Date.now() - attemptStartTime) / 1000; // Convert to seconds
+    const { accuracy, isCorrect } = recordAttempt(transcript, timeToComplete);
     
-    // Remove punctuation for comparison
-    const cleanSpoken = cleanTranscript.replace(/[.,!?;:]/g, '');
-    
-    // Use the locked sentence from ref
-    const sentence = listeningSentenceRef.current;
-    const cleanCorrect = sentence.correct.toLowerCase().replace(/[.,!?;:]/g, '');
-    
-    console.log('Comparing:', cleanSpoken, 'vs', cleanCorrect);
-    
-    if (cleanSpoken === cleanCorrect) {
+    if (isCorrect) {
       playSound('correct');
       toast({
         title: "Perfect! 🎉",
-        description: "You spoke the sentence correctly!",
+        description: `${accuracy}% accuracy! ${getDifficultyMessage()}`,
       });
       
-      // Auto-advance to next sentence
       setTimeout(() => {
         nextSentence();
       }, 2000);
     } else {
       playSound('incorrect');
-      setAttempts(prev => prev + 1);
       toast({
-        title: "Try Again",
-        description: `You said: "${transcript}". Try speaking the correct sentence.`,
+        title: `${accuracy}% Match`,
+        description: `You said: "${transcript}". Try again!`,
         variant: "destructive"
       });
     }
   };
 
+  const getDifficultyMessage = () => {
+    switch (progress.currentLevel) {
+      case 'beginner': return 'Keep it up! 🌟';
+      case 'intermediate': return 'Getting challenging! 💪';
+      case 'advanced': return 'Expert level! 👑';
+      default: return 'Great job! 🎯';
+    }
+  };
+
   const initializeSentence = useCallback(() => {
+    if (!currentSentence) {
+      return; // Don't initialize if no sentence is available
+    }
+    
     // Shuffle the words and create word objects
     const shuffledWords = [...currentSentence.words]
       .sort(() => Math.random() - 0.5)
@@ -157,16 +208,29 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   }, [initializeSentence]);
 
   const nextSentence = () => {
-    const currentIndex = sentences.indexOf(currentSentence);
-    const nextIndex = (currentIndex + 1) % sentences.length;
-    setCurrentSentence(sentences[nextIndex]);
+    // Get a new random sentence of the selected difficulty
+    const newSentence = getRandomSentence(selectedDifficulty);
+    hookNextSentence(newSentence);
     setScore(prev => prev + 1);
     setAttempts(0);
+    setAttemptStartTimeLocal(Date.now());
   };
 
   const resetSentence = () => {
     initializeSentence();
     setAttempts(0);
+  };
+
+  const shuffleSentence = () => {
+    const newSentence = getRandomSentence(selectedDifficulty);
+    hookNextSentence(newSentence);
+    setAttempts(0);
+    setAttemptStartTimeLocal(Date.now());
+    playSound('click');
+    toast({
+      title: "🔄 New Sentence!",
+      description: "Try this new sentence!",
+    });
   };
 
   const handleShowHint = () => {
@@ -175,6 +239,8 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   };
 
   const speakSentence = () => {
+    if (!currentSentence) return;
+    
     const utterance = new SpeechSynthesisUtterance(currentSentence.correct);
     utterance.lang = 'en-US';
     utterance.rate = 0.8;
@@ -243,6 +309,8 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   };
 
   const checkSentenceCompletion = (slots: (Word | null)[]) => {
+    if (!currentSentence) return;
+    
     // Check if all slots are filled
     if (slots.every(slot => slot !== null)) {
       const constructedSentence = slots.map(slot => slot!.text).join(' ');
@@ -254,6 +322,15 @@ const SentenceBuilderWithWhisper: React.FC = () => {
         toast({
           title: "Excellent! 🎉",
           description: "You built the sentence correctly!",
+        });
+        
+        // Update progress for drag-and-drop completion
+        updateStudentProgress({
+          sentenceId: currentSentence.id,
+          difficulty: currentSentence.difficulty,
+          isCorrect: true,
+          attempts: attempts + 1,
+          timeSpent: sessionTime
         });
         
         setTimeout(() => {
@@ -289,17 +366,140 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-6xl mx-auto space-y-6">
+      {/* Progress Dashboard */}
+      {showProgress && (
+        <ProgressDashboard 
+          progress={{
+            averageAccuracy: progress.averageAccuracy,
+            currentStreak: progress.currentStreak,
+            bestStreak: progress.bestStreak,
+            averageSpeed: getProgressMetrics().speed,
+            levelProgress: progress.levelProgress,
+            currentLevel: progress.currentLevel,
+            easyAccuracy: progress.levelProgress.easy.accuracy,
+            mediumAccuracy: progress.levelProgress.medium.accuracy,
+            hardAccuracy: progress.levelProgress.hard.accuracy,
+            easyCompleted: progress.levelProgress.easy.completed,
+            easyTotal: progress.levelProgress.easy.total,
+            mediumCompleted: progress.levelProgress.medium.completed,
+            mediumTotal: progress.levelProgress.medium.total,
+            hardCompleted: progress.levelProgress.hard.completed,
+            hardTotal: progress.levelProgress.hard.total,
+            badges: progress.badges,
+            completedSentences: progress.completedSentences
+          }}
+        />
+      )}
+      
       {/* Header */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Sentence Builder (Whisper Voice Recognition)</span>
-            <Badge variant="outline">Score: {score}</Badge>
+            <span className="flex items-center gap-2">
+              Sentence Builder 
+              <Badge variant={progress.currentLevel === 'beginner' ? 'default' : progress.currentLevel === 'intermediate' ? 'secondary' : 'destructive'}>
+                {progress.currentLevel.toUpperCase()} LEVEL
+              </Badge>
+            </span>
+            <div className="flex items-center gap-4">
+              <Badge variant="outline">Score: {progress.correctAttempts}/{progress.totalAttempts}</Badge>
+              <Badge variant="outline">🔥 {progress.currentStreak}</Badge>
+            </div>
           </CardTitle>
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>Attempts: {attempts}</span>
             <span>Time: {getFormattedTime()}</span>
+          </div>
+          
+          {/* Progress Metrics */}
+          <div className="flex items-center gap-4 text-sm text-gray-600 mt-2">
+            <span>Accuracy: {Math.round(getProgressMetrics().accuracy)}%</span>
+            <span>Streak: {getProgressMetrics().streak}</span>
+            <span>Completed: {getProgressMetrics().totalCompleted}</span>
+          </div>
+          
+          {/* Difficulty Selection */}
+          <div className="flex gap-2 mt-4">
+            <Button
+              variant={selectedDifficulty === 'beginner' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setSelectedDifficulty('beginner');
+                const newSentence = getRandomSentence('beginner');
+                hookNextSentence(newSentence);
+                setAttempts(0);
+                setAttemptStartTimeLocal(Date.now());
+              }}
+            >
+              Beginner
+            </Button>
+            <Button
+              variant={selectedDifficulty === 'intermediate' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setSelectedDifficulty('intermediate');
+                const newSentence = getRandomSentence('intermediate');
+                hookNextSentence(newSentence);
+                setAttempts(0);
+                setAttemptStartTimeLocal(Date.now());
+              }}
+            >
+              Intermediate
+            </Button>
+            <Button
+              variant={selectedDifficulty === 'advanced' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setSelectedDifficulty('advanced');
+                const newSentence = getRandomSentence('advanced');
+                hookNextSentence(newSentence);
+                setAttempts(0);
+                setAttemptStartTimeLocal(Date.now());
+              }}
+            >
+              Advanced
+            </Button>
+          </div>
+          
+          {/* Current Sentence Info */}
+          {currentSentence && (
+            <div className="mt-2 text-sm text-gray-600">
+              <span>Category: {currentSentence.category}</span>
+              {currentSentence.grammar_focus && (
+                <span className="ml-4">Focus: {currentSentence.grammar_focus}</span>
+              )}
+              {isSentenceCompleted(currentSentence.id) && (
+                <Badge variant="secondary" className="ml-2">Completed</Badge>
+              )}
+            </div>
+          )}
+          
+          {/* Progress Toggle and Reset */}
+          <div className="mt-4 flex gap-2">
+            <Button
+              onClick={() => setShowProgress(!showProgress)}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              {showProgress ? "Hide Progress" : "View Progress"}
+            </Button>
+            <Button
+              onClick={() => {
+                forceResetAllData();
+                toast({
+                  title: "🔄 Progress Reset",
+                  description: "All progress data has been cleared!",
+                });
+              }}
+              variant="destructive"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset All Progress
+            </Button>
           </div>
         </CardHeader>
       </Card>
@@ -334,12 +534,9 @@ const SentenceBuilderWithWhisper: React.FC = () => {
             </Button>
           </div>
           
-          {isListening && (
+          {isListening && currentSentence && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 font-medium">🎤 Listening... Speak the correct sentence!</p>
-              <p className="text-sm text-blue-600 mt-1">
-                Target: "{currentSentence.correct}"
-              </p>
             </div>
           )}
           
@@ -369,6 +566,15 @@ const SentenceBuilderWithWhisper: React.FC = () => {
                   {showHint ? 'Hide' : 'Show'} Hint
                 </Button>
                 <Button
+                  onClick={shuffleSentence}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Shuffle className="h-4 w-4" />
+                  New Sentence
+                </Button>
+                <Button
                   onClick={resetSentence}
                   variant="outline"
                   size="sm"
@@ -380,9 +586,10 @@ const SentenceBuilderWithWhisper: React.FC = () => {
               </div>
             </CardTitle>
             {showHint && (
-              <Alert>
+              <Alert className="bg-blue-50 border-blue-200">
+                <Lightbulb className="h-4 w-4" />
                 <AlertDescription>
-                  Correct sentence: "{currentSentence.correct}"
+                  <strong>Hint:</strong> {currentSentence?.hint || "Think about the word order!"}
                 </AlertDescription>
               </Alert>
             )}
@@ -461,15 +668,18 @@ const SentenceBuilderWithWhisper: React.FC = () => {
         </Card>
       </DragDropContext>
 
-      {/* Progress */}
+      {/* Session Progress */}
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-2">
             <div className="flex justify-between text-sm text-gray-600">
-              <span>Progress</span>
-              <span>{score} sentences completed</span>
+              <span>Session Progress</span>
+              <span>{score} sentences completed this session</span>
             </div>
-            <Progress value={(score / sentences.length) * 100} />
+            <Progress value={score > 0 ? Math.min((score / 10) * 100, 100) : 0} />
+            <div className="text-xs text-gray-500">
+              {score}/10 sentences this session
+            </div>
           </div>
         </CardContent>
       </Card>

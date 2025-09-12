@@ -61,7 +61,7 @@ const AIQuestionDemo: React.FC = () => {
       const questions = await generateMultipleAIQuestions({
         difficulty: 2,
         topic: 'vocabulary',
-        count: 3,
+        count: 5,
         maxRetries: 2
       });
 

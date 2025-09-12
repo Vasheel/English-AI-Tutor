@@ -198,28 +198,40 @@ def generate_quiz(payload: GenerateQuizPayload):
         
         print(f"[DEBUG] Using random start pattern: {random_start}")
         
-        # ENHANCED system prompt for CHALLENGING questions (MCQ ONLY)
+        # ENHANCED system prompt for AGE-APPROPRIATE questions (MCQ ONLY)
         system_prompt = (
-            "You are a PSAC Grade 6 English quiz generator for ADVANCED students in Mauritius. "
-            "Generate CHALLENGING questions that require critical thinking and deep understanding. "
-            "\n\nCRITICAL FORMAT REQUIREMENT:\n"
+            "You are a PSAC Grade 6 English quiz generator for 11-year-old students in Mauritius. "
+            "Generate CLEAR, AGE-APPROPRIATE questions that are educational but not confusing. "
+            "\n\nCRITICAL REQUIREMENTS FOR 11-YEAR-OLDS:\n"
+            "1. Use SIMPLE, CLEAR vocabulary - avoid complex words like 'sophisticated', 'elaborate', 'comprehensive', 'intricate'\n"
+            "2. Make questions UNAMBIGUOUS - only ONE answer should be clearly correct\n"
+            "3. For True/False questions: ONLY use 'True' and 'False' options (exactly 2 options, never 'somewhat true', 'always false', 'not sure', 'maybe', etc.)\n"
+            "4. Avoid questions where multiple answers could be considered correct\n"
+            "5. Use everyday language that 11-year-olds understand\n"
+            "6. ENSURE ALL OPTIONS ARE DISTINCT - avoid similar/overlapping options (e.g., don't use both 'quietly' and 'silently' as they mean the same thing)\n"
+            "7. ENSURE ALL ANSWERS ARE FACTUALLY CORRECT - double-check grammar rules, spelling, and facts\n"
+            "8. For grammar questions, make sure the 'correct' answer is actually correct and the 'incorrect' options have real errors\n"
+            "\n\nFORMAT REQUIREMENT:\n"
             "ALL questions MUST be in MULTIPLE CHOICE format with EXACTLY 4 options.\n"
+            "For True/False questions, use: ['True', 'False'] (exactly 2 options only)\n"
             "NEVER generate open-ended, analysis, or essay questions.\n"
-            "NEVER ask students to 'explain', 'analyze', or 'describe' without options.\n"
             "ALWAYS provide 4 clickable options (A, B, C, D) for EVERY question.\n"
-            "\n\nEXAMPLES OF CORRECT MCQ FORMAT:\n"
-            "- 'Which word best describes the protagonist's emotional state?' + 4 options\n"
-            "- 'What can be inferred from this sentence?' + 4 options\n"
-            "- 'Choose the correct interpretation:' + 4 options\n"
-            "\n\nEXAMPLES OF WRONG FORMAT (DO NOT USE):\n"
-            "- 'Analyze the following sentence and explain...'\n"
-            "- 'Describe what can be inferred...'\n"
-            "- Any question without exactly 4 options\n"
+            "\n\nEXAMPLES OF GOOD QUESTIONS:\n"
+            "- 'Which word means the same as 'happy'?' + 4 simple options\n"
+            "- 'What is the main idea of this sentence?' + 4 clear options\n"
+            "- 'Which sentence is written correctly?' + 4 options with obvious errors\n"
+            "\n\nEXAMPLES OF BAD QUESTIONS (DO NOT USE):\n"
+            "- 'Which sentence is a more sophisticated transformation...' (too complex)\n"
+            "- Questions where multiple answers could be right\n"
+            "- True/False with options like 'somewhat true', 'always false'\n"
+            "- Using words like 'sophisticated', 'elaborate', 'comprehensive'\n"
+            "- Options that are too similar: ['quietly', 'silently', 'softly', 'peacefully'] (quietly/silently mean the same)\n"
+            "- Overlapping synonyms: ['happy', 'joyful', 'glad', 'cheerful'] (too similar meanings)\n"
             "\n\nReturn ONLY valid JSON in this exact format:\n"
             '{"items": [{"id": "q1", "type": "mcq", '
-            '"question": "Question text with a clear prompt?", '
+            '"question": "Simple, clear question for 11-year-olds?", '
             '"options": ["Option A", "Option B", "Option C", "Option D"], '
-            '"answer": 0, "explanation": "Explanation"}]}'
+            '"answer": 0, "explanation": "Simple explanation"}]}'
             '\nEVERY item MUST have "type": "mcq" and exactly 4 options.'
         )
         
@@ -250,8 +262,17 @@ def generate_quiz(payload: GenerateQuizPayload):
         session_id = uuid.uuid4().hex[:8]
 
         user_prompt = (
-            f"Generate EXACTLY {count} MULTIPLE CHOICE questions (MCQ only!) for ADVANCED Grade 6 English students. "
+            f"Generate EXACTLY {count} MULTIPLE CHOICE questions (MCQ only!) for 11-YEAR-OLD Grade 6 English students. "
             f"Topic: {query_text}. Skills: {', '.join(skills)}. "
+            f"\n\nCRITICAL REQUIREMENTS FOR 11-YEAR-OLDS:\n"
+            f"1. Use SIMPLE vocabulary - NO complex words like 'sophisticated', 'elaborate', 'comprehensive'\n"
+            f"2. Make questions UNAMBIGUOUS - only ONE answer should be clearly correct\n"
+            f"3. For True/False: ONLY use 'True' and 'False' (exactly 2 options, never 'somewhat true', 'always false', 'not sure', 'maybe')\n"
+            f"4. Avoid questions where multiple answers could be right\n"
+            f"5. Use everyday language that 11-year-olds understand\n"
+            f"6. ENSURE ALL OPTIONS ARE DISTINCT - avoid similar/overlapping options (e.g., don't use both 'quietly' and 'silently')\n"
+            f"7. ENSURE ALL ANSWERS ARE FACTUALLY CORRECT - double-check grammar rules and facts\n"
+            f"8. For grammar questions, make sure the 'correct' answer is actually correct\n"
             f"\n\nFORMAT REQUIREMENTS:\n"
             f"1. EVERY question MUST be multiple choice with 4 options\n"
             f"2. NEVER ask for written explanations or analysis\n"
@@ -264,6 +285,7 @@ def generate_quiz(payload: GenerateQuizPayload):
             f"\n\nVARIETY INSTRUCTIONS:\n" + "\n".join(variety_instructions) +
             f"\n\nDO NOT generate questions that ask students to write, type, or explain anything.\n"
             f"ONLY generate questions where students click one of 4 options.\n"
+            f"AVOID complex vocabulary and ambiguous questions.\n"
             f"\nRandomization: {random.randint(100000, 999999)}\n"
             f"Timestamp: {timestamp}\n"
             f"Session ID: {session_id}"
@@ -373,16 +395,54 @@ def generate_quiz(payload: GenerateQuizPayload):
                 q_type = "mcq"
                 question = q.get("question") or q.get("prompt", f"Question {i+1}")
                 options = q.get("options", [])
-                if not options or len(options) < 4:
-                    print(f"[DEBUG] Question {i} missing options, skipping")
+                if not options:
+                    print(f"[DEBUG] Question {i} has no options, skipping")
                     continue
-                if len(options) > 4:
-                    options = options[:4]
-                while len(options) < 4:
-                    options.append(f"Option {len(options)+1}")
+                
+                # Clean and validate options
+                print(f"[DEBUG] Question {i} raw options: {options}")
+                options = [str(opt).strip() for opt in options if str(opt).strip()]
+                print(f"[DEBUG] Question {i} cleaned options: {options}")
+                
+                # Check if this is a True/False question
+                is_true_false = (
+                    "true or false" in question.lower() or 
+                    "true/false" in question.lower() or
+                    any(opt.lower() in ["true", "false"] for opt in options)
+                )
+                
+                if is_true_false:
+                    # For True/False questions, ensure we have exactly 2 options
+                    print(f"[DEBUG] Question {i} is True/False, ensuring 2 options")
+                    if len(options) < 2:
+                        # Add missing True/False options
+                        if not any(opt.lower() == "true" for opt in options):
+                            options.append("True")
+                        if not any(opt.lower() == "false" for opt in options):
+                            options.append("False")
+                    elif len(options) > 2:
+                        # Keep only True and False if present, otherwise take first 2
+                        true_false_options = [opt for opt in options if opt.lower() in ["true", "false"]]
+                        if len(true_false_options) >= 2:
+                            options = true_false_options[:2]
+                        else:
+                            options = options[:2]
+                else:
+                    # For regular questions, ensure we have exactly 4 options
+                    if len(options) < 4:
+                        print(f"[DEBUG] Question {i} has only {len(options)} options, padding to 4")
+                        # Pad with generic options if needed
+                        while len(options) < 4:
+                            options.append(f"Option {len(options)+1}")
+                    elif len(options) > 4:
+                        options = options[:4]
+                
+                print(f"[DEBUG] Question {i} final options: {options}")
 
                 answer = q.get("answer", 0)
-                if not isinstance(answer, int) or answer < 0 or answer >= 4:
+                # Validate answer index based on number of options
+                max_answer_index = len(options) - 1
+                if not isinstance(answer, int) or answer < 0 or answer > max_answer_index:
                     answer = 0
 
                 # Skip if question is too similar to a previous one
@@ -437,102 +497,102 @@ def generate_quiz(payload: GenerateQuizPayload):
         return create_challenging_fallback_response(count)
 
 def create_challenging_fallback_response(count: int) -> BackendQuizResponse:
-    """Create challenging fallback questions for when API fails"""
-    print(f"[DEBUG] Creating challenging fallback response")
+    """Create age-appropriate fallback questions for when API fails"""
+    print(f"[DEBUG] Creating age-appropriate fallback response")
     
-    challenging_questions = [
+    age_appropriate_questions = [
         QuizItem(
             id="fallback_1",
             type="mcq",
-            question="Which sentence demonstrates correct use of the subjunctive mood?",
+            question="Which sentence is written correctly?",
             options=[
-                "If I was rich, I would travel the world.",
-                "If I were rich, I would travel the world.",
-                "If I am rich, I would travel the world.",
-                "If I will be rich, I would travel the world."
+                "She goed to school yesterday.",
+                "She went to school yesterday.",
+                "She go to school yesterday.",
+                "She going to school yesterday."
             ],
             answer=1,
-            explanation="The subjunctive mood uses 'were' instead of 'was' for hypothetical situations, regardless of the subject."
+            explanation="'Went' is the correct past tense of 'go'."
         ),
         QuizItem(
             id="fallback_2",
             type="mcq",
-            question="Identify the type of figurative language: 'The homework was a mountain of impossibility.'",
-            options=["Simile", "Metaphor", "Personification", "Hyperbole"],
-            answer=1,
-            explanation="This is a metaphor - it directly compares homework to a mountain without using 'like' or 'as'."
+            question="What type of word is 'quickly' in this sentence: 'She ran quickly'?",
+            options=["Noun", "Verb", "Adjective", "Adverb"],
+            answer=3,
+            explanation="'Quickly' describes how she ran, so it's an adverb."
         ),
         QuizItem(
             id="fallback_3",
             type="mcq",
-            question="Which sentence contains a dangling modifier?",
-            options=[
-                "Running quickly, John caught the bus.",
-                "Walking through the park, the flowers were beautiful.",
-                "After studying hard, she passed the exam.",
-                "While eating dinner, we watched TV."
-            ],
-            answer=1,
-            explanation="'Walking through the park' appears to modify 'flowers', but flowers can't walk - this is a dangling modifier."
+            question="Which word means the same as 'happy'?",
+            options=["Sad", "Angry", "Joyful", "Tired"],
+            answer=2,
+            explanation="'Joyful' means the same as 'happy' - both describe a positive feeling."
         ),
         QuizItem(
             id="fallback_4",
             type="mcq",
-            question="Choose the word that best completes the analogy: Doctor : Hospital :: Teacher : ?",
-            options=["Student", "Classroom", "Book", "Learning"],
+            question="Choose the correct sentence:",
+            options=[
+                "The cat are sleeping.",
+                "The cat is sleeping.",
+                "The cat am sleeping.",
+                "The cat be sleeping."
+            ],
             answer=1,
-            explanation="A doctor works in a hospital, just as a teacher works in a classroom. This is a place relationship analogy."
+            explanation="'The cat' is singular, so we use 'is' not 'are'."
         ),
         QuizItem(
             id="fallback_5",
             type="mcq",
-            question="Which sentence uses parallel structure correctly?",
+            question="Which sentence has the correct punctuation?",
             options=[
-                "She likes reading, to swim, and biking.",
-                "She likes reading, swimming, and biking.",
-                "She likes to read, swimming, and to bike.",
-                "She likes read, swim, and biking."
+                "Hello how are you",
+                "Hello, how are you?",
+                "Hello how are you?",
+                "Hello, how are you"
             ],
             answer=1,
-            explanation="Parallel structure requires all items in a list to have the same grammatical form: reading, swimming, biking (all gerunds)."
+            explanation="We need a comma after 'Hello' and a question mark at the end."
         ),
         QuizItem(
             id="fallback_6",
             type="mcq",
-            question="What is the effect of using passive voice in this sentence: 'Mistakes were made'?",
+            question="What is the main idea of this sentence: 'The sun shines brightly in the sky'?",
             options=[
-                "It emphasizes who made the mistakes",
-                "It obscures who is responsible for the mistakes",
-                "It makes the sentence more direct",
-                "It shortens the sentence"
+                "The sky is blue",
+                "The sun is bright",
+                "It's daytime",
+                "The weather is good"
             ],
             answer=1,
-            explanation="Passive voice hides the agent (who made the mistakes), often used to avoid assigning blame or responsibility."
+            explanation="The sentence is mainly about the sun being bright."
         ),
         QuizItem(
             id="fallback_7",
-            type="fitb",
-            question="Complete with the correct word: 'The committee ____ unable to reach a consensus.' (was/were)",
-            options=["was", "were"],
-            answer="was",
-            explanation="'Committee' is a collective noun that is typically treated as singular in American English, so 'was' is correct."
+            type="mcq",
+            question="Which word is a noun?",
+            options=["Run", "Beautiful", "House", "Quickly"],
+            answer=2,
+            explanation="'House' is a noun - it's a thing you can see and touch."
         ),
         QuizItem(
             id="fallback_8",
             type="mcq",
-            question="Which transition word indicates a contrasting relationship?",
-            options=["Furthermore", "Nevertheless", "Similarly", "Therefore"],
+            question="True or False: 'I have went to the store' is correct grammar.",
+            options=["True", "False"],
             answer=1,
-            explanation="'Nevertheless' indicates contrast or opposition, similar to 'however' or 'despite this'."
+            explanation="This is false. It should be 'I have gone to the store' or 'I went to the store'."
         )
     ]
     
     # Shuffle to ensure variety even in fallback
-    random.shuffle(challenging_questions)
+    random.shuffle(age_appropriate_questions)
     
     return BackendQuizResponse(
-        items=challenging_questions[:count],
-        source="fallback (challenging)"
+        items=age_appropriate_questions[:count],
+        source="fallback (age-appropriate)"
     )
 
 def create_fallback_response(count: int, error_reason: str) -> BackendQuizResponse:

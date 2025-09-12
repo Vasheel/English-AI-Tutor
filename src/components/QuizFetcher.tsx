@@ -35,7 +35,7 @@ export default function QuizFetcher() {
         body: JSON.stringify({
           unit: 1,
           skills: ["grammar", "vocabulary"],
-          count: 3,
+          count: 5,
           difficulty: "PSAC-G6",
           keywords: ["nouns"],
           query: "Grade 6 English nouns",

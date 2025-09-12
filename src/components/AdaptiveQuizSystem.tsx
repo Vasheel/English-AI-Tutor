@@ -505,20 +505,6 @@ const generateRandomQuiz = async () => {
             })}
           </div>
 
-          {/* Overall Progress */}
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="font-semibold mb-2">Overall Progress</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p>Total Questions Attempted: {performance.totalQuestions}</p>
-                <p>Overall Accuracy: {performance.accuracy.toFixed(1)}%</p>
-              </div>
-              <div>
-                <p>Avg Response Time: {performance.avgResponseTime.toFixed(1)}s</p>
-                <p>Current Streak: {performance.streak}</p>
-              </div>
-            </div>
-          </div>
 
           <Button 
             onClick={() => {

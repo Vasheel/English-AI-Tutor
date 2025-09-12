@@ -60,6 +60,7 @@ interface AIResult {
   context_passed: boolean;
   score: number;
   explanations?: string[];
+  context_feedback?: string[];
 }
 
 // Flexible validation function that's more forgiving
@@ -166,7 +167,7 @@ export default function ImageDescriptionQuiz({
     'Include details about the environment'
   ],
   difficulty = 'medium',
-  minWordCount = 3,
+  minWordCount = 10,
   onComplete
 }: ImageQuizProps) {
   const [userDescription, setUserDescription] = useState('');
@@ -185,7 +186,9 @@ export default function ImageDescriptionQuiz({
   const [optKeywords, setOptKeywords] = useState<string[]>(optionalKeywords);
 
   const wordCount = userDescription.trim().split(/\s+/).filter(word => word.length > 0).length;
+  const maxWords = 50;
   const progress = Math.min(100, (wordCount / minWordCount) * 100);
+  const isOverLimit = wordCount > maxWords;
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -212,7 +215,8 @@ export default function ImageDescriptionQuiz({
         context_score: data.context_score ?? 0,
         context_passed: data.context_passed ?? true,
         score: data.score ?? data.grammar_score ?? 0,
-        explanations: data.explanations
+        explanations: data.explanations,
+        context_feedback: data.context_feedback
       };
       setAiResult(mapped);
       setValidationResult(null);
@@ -429,16 +433,22 @@ export default function ImageDescriptionQuiz({
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center justify-between">
               <span>Your Description:</span>
-              <span className={`text-sm ${wordCount >= minWordCount ? 'text-green-600' : 'text-gray-500'}`}>
-                {wordCount}/{minWordCount} words
+              <span className={`text-sm ${isOverLimit ? 'text-red-600' : wordCount >= minWordCount ? 'text-green-600' : 'text-gray-500'}`}>
+                {wordCount}/{maxWords} words {wordCount >= minWordCount && `(min: ${minWordCount})`}
               </span>
             </label>
             
             <Textarea
               value={userDescription}
-              onChange={(e) => setUserDescription(e.target.value)}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                const newWordCount = newValue.trim().split(/\s+/).filter(word => word.length > 0).length;
+                if (newWordCount <= maxWords) {
+                  setUserDescription(newValue);
+                }
+              }}
               placeholder="Describe what you see in the image. Be specific and detailed..."
-              className="min-h-[120px] resize-none"
+              className={`min-h-[120px] resize-none ${isOverLimit ? 'border-red-500' : ''}`}
               disabled={isSubmitting}
             />
             
@@ -449,7 +459,7 @@ export default function ImageDescriptionQuiz({
           <div className="flex gap-3 justify-center">
             <Button
               onClick={handleSubmit}
-              disabled={wordCount < minWordCount || isSubmitting}
+              disabled={wordCount < minWordCount || isOverLimit || isSubmitting}
               className="gap-2"
             >
               {isSubmitting ? (
@@ -500,19 +510,40 @@ export default function ImageDescriptionQuiz({
                   <div className="text-sm text-gray-600">Context Score</div>
                 </div>
               </div>
-              {!aiResult.context_passed && (
-                <Alert className='bg-yellow-50 border-yellow-200'>
+              
+              {/* Detailed Context Feedback */}
+              {aiResult.context_feedback && aiResult.context_feedback.length > 0 && (
+                <Alert className={`${aiResult.context_score >= 80 ? 'bg-green-50 border-green-200' : aiResult.context_score >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'}`}>
                   <div className='flex items-start gap-2'>
-                    <AlertCircle className='w-5 h-5 text-yellow-600 mt-0.5' />
+                    <AlertCircle className={`w-5 h-5 mt-0.5 ${aiResult.context_score >= 80 ? 'text-green-600' : aiResult.context_score >= 60 ? 'text-yellow-600' : 'text-red-600'}`} />
                     <div className='flex-1'>
-                      <p className='font-semibold'>Description needs improvement.</p>
-                      {aiResult.explanations && aiResult.explanations.length > 0 && (
-                        <ul className='mt-2 list-disc list-inside text-sm text-gray-700'>
-                          {aiResult.explanations.map((h: string, i: number) => (
-                            <li key={i}>{h}</li>
-                          ))}
-                        </ul>
-                      )}
+                      <p className='font-semibold'>
+                        {aiResult.context_score >= 80 ? 'Great description!' : 
+                         aiResult.context_score >= 60 ? 'Good description, but could be better.' : 
+                         'Description needs improvement.'}
+                      </p>
+                      <ul className='mt-2 list-disc list-inside text-sm text-gray-700'>
+                        {aiResult.context_feedback.map((feedback: string, i: number) => (
+                          <li key={i}>{feedback}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </Alert>
+              )}
+              
+              {/* Additional explanations if any */}
+              {aiResult.explanations && aiResult.explanations.length > 0 && (
+                <Alert className='bg-blue-50 border-blue-200'>
+                  <div className='flex items-start gap-2'>
+                    <AlertCircle className='w-5 h-5 text-blue-600 mt-0.5' />
+                    <div className='flex-1'>
+                      <p className='font-semibold'>Additional feedback:</p>
+                      <ul className='mt-2 list-disc list-inside text-sm text-gray-700'>
+                        {aiResult.explanations.map((h: string, i: number) => (
+                          <li key={i}>{h}</li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                 </Alert>
