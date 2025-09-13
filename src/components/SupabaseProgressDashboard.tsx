@@ -1,45 +1,115 @@
-import React, { useEffect } from 'react';
-import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import React, { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Trophy, Target, TrendingUp, Clock, Star, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RefreshCw, Trash2, BarChart3 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
-const SupabaseProgressDashboard = () => {
-  const { progress, badges, loading, fetchProgress, resetProgress, getProgressStats } = useSupabaseProgress();
+interface ProgressData {
+  activity_type: string;
+  total_attempts: number;
+  correct_answers: number;
+  total_time_spent: number;
+}
 
-  // Refresh progress data when component mounts
+const SupabaseProgressDashboard: React.FC = () => {
+  const [progress, setProgress] = useState<ProgressData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchProgress = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        setError('No user found');
+        return;
+      }
+
+      const { data, error: fetchError } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (fetchError) {
+        console.error('Error fetching progress:', fetchError);
+        setError('Failed to fetch progress data');
+      } else {
+        setProgress(data || []);
+        console.log('📊 Fetched progress data:', data);
+      }
+    } catch (error) {
+      console.error('Error in fetchProgress:', error);
+      setError('Failed to load progress');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetProgress = async (activityType: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('No user found');
+        return;
+      }
+
+      const { error: resetError } = await supabase
+        .from('user_progress')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('activity_type', activityType);
+
+      if (resetError) {
+        console.error('Error resetting progress:', resetError);
+      } else {
+        console.log(`✅ Reset progress for ${activityType}`);
+        await fetchProgress();
+      }
+    } catch (error) {
+      console.error('Error in resetProgress:', error);
+    }
+  };
+
+  const resetAllProgress = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('No user found');
+        return;
+      }
+
+      const { error: resetError } = await supabase
+        .from('user_progress')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (resetError) {
+        console.error('Error resetting all progress:', resetError);
+      } else {
+        console.log('✅ Reset all progress');
+        await fetchProgress();
+      }
+    } catch (error) {
+      console.error('Error in resetAllProgress:', error);
+    }
+  };
+
   useEffect(() => {
     fetchProgress();
-  }, [fetchProgress]);
+  }, []);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('📊 Dashboard received progress data:', progress);
-    console.log('🏆 Dashboard received badges:', badges);
-  }, [progress, badges]);
-
-  if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Calculate stats for all activities first
+  // Calculate totals
   const totalAttempts = progress.reduce((sum, p) => sum + (p.total_attempts || 0), 0);
   const totalCorrect = progress.reduce((sum, p) => sum + (p.correct_answers || 0), 0);
-  const totalTime = progress.reduce((sum, p) => sum + (p.total_time_spent || 0), 0);
-  const totalTimeMinutes = Math.floor(totalTime / 60);
-  const totalTimeSeconds = totalTime % 60;
+  const totalTimeSpent = progress.reduce((sum, p) => sum + (p.total_time_spent || 0), 0);
+
+  // Format time spent
+  const totalTimeMinutes = Math.floor(totalTimeSpent / 60);
+  const totalTimeSeconds = totalTimeSpent % 60;
   const formattedTime = totalTimeMinutes > 0 
     ? `${totalTimeMinutes}m ${totalTimeSeconds}s`
     : `${totalTimeSeconds}s`;
@@ -49,36 +119,59 @@ const SupabaseProgressDashboard = () => {
     ? Math.round((totalCorrect / totalAttempts) * 100)
     : 0;
 
-  // Activity display name mapping
+  // Activity display name mapping - Updated to match your requirements
   const getActivityDisplayName = (activityType: string) => {
     const nameMap: { [key: string]: string } = {
-      'quiz': 'Quizzes',
-      'word_scramble': 'Word Scramble',
+      'grammar_exercises': 'Grammar Exercises',
+      'word_scramble': 'Word Scramble', 
       'sentence_builder': 'Sentence Builder',
-      'reading_comprehension': 'Reading',
-      'grammar_exercises': 'Grammar Exercises'
+      'cloze': 'Cloze',
+      'smart_quiz': 'Smart Quiz',
+      'image_quiz': 'Image Quiz',
+      // Legacy mappings for backward compatibility
+      'quiz': 'Smart Quiz', // Map old 'quiz' to 'Smart Quiz'
+      'reading_comprehension': 'Reading'
     };
     return nameMap[activityType] || activityType.replace('_', ' ').toUpperCase();
   };
 
-  // Filter activities for display but keep all data for calculations
-  const validActivities = ['quiz', 'word_scramble', 'sentence_builder', 'reading_comprehension', 'grammar_exercises'];
-  const filteredProgress = progress.filter(p => validActivities.includes(p.activity_type));
+  // Updated valid activities to match your requirements
+  const validActivities = [
+    'grammar_exercises', 
+    'word_scramble', 
+    'sentence_builder', 
+    'cloze', 
+    'smart_quiz', 
+    'image_quiz'
+  ];
+  
+  // Include legacy 'quiz' activity and map it to smart_quiz for display
+  const allValidActivities = [...validActivities, 'quiz', 'reading_comprehension'];
+  const filteredProgress = progress.filter(p => allValidActivities.includes(p.activity_type));
+
+  // Create a complete list of all expected activities with zero values for missing ones
+  const completeActivityList = validActivities.map(activity => {
+    const existingProgress = filteredProgress.find(p => 
+      p.activity_type === activity || (activity === 'smart_quiz' && p.activity_type === 'quiz')
+    );
+    
+    return existingProgress || {
+      activity_type: activity,
+      total_attempts: 0,
+      correct_answers: 0,
+      total_time_spent: 0
+    };
+  });
 
   console.log('📈 Calculated dashboard stats:', {
     totalAttempts,
     totalCorrect,
     overallAccuracy,
     formattedTime,
-    filteredProgress
+    filteredProgress,
+    completeActivityList
   });
 
-  // Check for data corruption
-  const corruptedActivities = progress.filter(p => 
-    (p.correct_answers || 0) > (p.total_attempts || 0)
-  );
-
-  // Ensure we show all attempts, even if they're 0
   const getAccuracyColor = (accuracy: number) => {
     if (accuracy >= 80) return "text-green-600";
     if (accuracy >= 60) return "text-yellow-600";
@@ -87,171 +180,157 @@ const SupabaseProgressDashboard = () => {
 
   const handleRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
+    setIsLoading(true);
     await fetchProgress();
   };
 
-  const handleResetQuiz = async () => {
-    await resetProgress('quiz');
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <RefreshCw className="w-6 h-6 animate-spin mr-2" />
+        Loading progress...
+      </div>
+    );
+  }
 
-  const handleResetAll = async () => {
-    await resetProgress();
-  };
-
-  const resetActivityData = async (activityType: string) => {
-    console.log(`🗑️ Resetting data for activity: ${activityType}`);
-    await resetProgress(activityType);
-    await fetchProgress(); // Re-fetch to update progress state
-  };
-
-  const resetAllData = async () => {
-    console.log('🗑️ Resetting all data');
-    await resetProgress();
-    await fetchProgress(); // Re-fetch to update progress state
-  };
-
-  const hasCorruption = corruptedActivities.length > 0;
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-red-600">
+        <p className="mb-4">Error: {error}</p>
+        <Button onClick={handleRefresh} variant="outline">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div className="text-center mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-3xl font-bold text-gray-800">📊 Your Learning Dashboard</h1>
-          <Button 
-            onClick={handleRefresh} 
-            variant="outline" 
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
+    <Card className="w-full max-w-6xl mx-auto">
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 text-purple-600" />
+            <CardTitle className="text-xl font-semibold text-gray-800">
+              Your Learning Dashboard
+            </CardTitle>
+          </div>
+          <Button onClick={handleRefresh} size="sm" variant="outline">
+            <RefreshCw className="w-4 h-4 mr-1" />
             Refresh
           </Button>
         </div>
-        <p className="text-gray-600">Track your progress and celebrate your achievements!</p>
-      </div>
+        <p className="text-sm text-gray-600 mt-1">
+          Track your progress and celebrate your achievements!
+        </p>
+      </CardHeader>
 
-      {/* Debug Panel */}
-      {(process.env.NODE_ENV === 'development' || hasCorruption) && (
-        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <h4 className="font-semibold text-yellow-800 mb-2">🔧 Debug Panel</h4>
-          
-          {hasCorruption && (
-            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded">
-              <h5 className="font-medium text-red-800 mb-2">⚠️ Data Corruption Detected!</h5>
-              <p className="text-sm text-red-700 mb-2">The following activities have more correct answers than attempts:</p>
-              <ul className="text-sm text-red-700 space-y-1">
-                {corruptedActivities.map(activity => (
-                  <li key={activity.activity_type} className="flex justify-between items-center">
-                    <span>• {activity.activity_type}: {activity.correct_answers} correct > {activity.total_attempts} attempts</span>
-                    <button
-                      onClick={() => resetActivityData(activity.activity_type)}
-                      className="ml-2 px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                    >
-                      Reset
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          
-          <div className="space-y-2">
-            <button
+      <CardContent className="space-y-6">
+        {/* Debug Panel - Can be removed in production */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-yellow-800 flex items-center gap-1">
+              🐛 Debug Panel
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <Button 
               onClick={handleRefresh}
-              className="w-full px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+              size="sm"
             >
-              🔄 Refresh Data
-            </button>
-            <button
-              onClick={resetAllData}
-              className="w-full px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Refresh Data
+            </Button>
+            <Button 
+              onClick={resetAllProgress}
+              className="bg-red-500 hover:bg-red-600 text-white"
+              size="sm"
             >
-              🗑️ Reset All Progress
-            </button>
+              <Trash2 className="w-4 h-4 mr-1" />
+              Reset All Progress
+            </Button>
           </div>
         </div>
-      )}
 
-      {/* Overall Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardContent className="p-4 text-center">
+        {/* Overall Statistics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
             <div className="text-2xl font-bold text-purple-600">{totalCorrect}</div>
             <div className="text-sm text-gray-600">Correct Answers</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className={`text-2xl font-bold ${getAccuracyColor(overallAccuracy)}`}>{overallAccuracy}%</div>
+          </div>
+          <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
+            <div className={`text-2xl font-bold ${getAccuracyColor(overallAccuracy)}`}>
+              {overallAccuracy}%
+            </div>
             <div className="text-sm text-gray-600">Overall Accuracy</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
+          </div>
+          <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div className="text-2xl font-bold text-blue-600">{formattedTime}</div>
             <div className="text-sm text-gray-600">Minutes Practiced</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-orange-600">{totalAttempts}</div>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="text-2xl font-bold text-green-600">{totalAttempts}</div>
             <div className="text-sm text-gray-600">Attempts</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Activity Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {validActivities.map(activity => {
-          const activityProgress = filteredProgress.find(p => p.activity_type === activity);
-          const activityAccuracy = activityProgress && activityProgress.total_attempts > 0 
-            ? Math.round((activityProgress.correct_answers / activityProgress.total_attempts) * 100)
-            : 0;
-
-          return (
-            <Card key={activity}>
-              <CardContent>
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold">{getActivityDisplayName(activity)}</h3>
-                  <div className={`text-sm ${getAccuracyColor(activityAccuracy)}`}>
-                    {activityAccuracy}%
-                  </div>
-                </div>
-                <Progress value={activityAccuracy} className="h-2" />
-                <div className="flex justify-between text-sm text-muted-foreground mt-2">
-                  <div>Attempts: {activityProgress?.total_attempts || 0}</div>
-                  <div>Correct: {activityProgress?.correct_answers || 0}</div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Achievements */}
-      {badges.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            <Trophy className="h-6 w-6 text-yellow-500" />
-            Achievements
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {badges.map((userBadge) => (
-              <Card key={userBadge.id}>
-                <CardContent className="p-4 text-center">
-                  <div className="text-3xl mb-2">{userBadge.badge.icon}</div>
-                  <h3 className="font-semibold mb-1">{userBadge.badge.name}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{userBadge.badge.description}</p>
-                  <div className="text-xs text-gray-500">
-                    Earned: {new Date(userBadge.earned_at).toLocaleDateString()}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Individual Activity Progress */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {completeActivityList.map((activity) => {
+            const accuracy = activity.total_attempts > 0 
+              ? Math.round((activity.correct_answers / activity.total_attempts) * 100)
+              : 0;
+            
+            const timeMinutes = Math.floor((activity.total_time_spent || 0) / 60);
+            const timeSeconds = (activity.total_time_spent || 0) % 60;
+            const timeDisplay = timeMinutes > 0 
+              ? `${timeMinutes}m ${timeSeconds}s`
+              : `${timeSeconds}s`;
+
+            return (
+              <div key={activity.activity_type} className="p-4 border rounded-lg bg-white shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium text-gray-800">
+                    {getActivityDisplayName(activity.activity_type)}
+                  </h3>
+                  <Badge 
+                    variant={accuracy >= 80 ? "default" : accuracy >= 60 ? "secondary" : "destructive"}
+                    className="text-xs"
+                  >
+                    {accuracy}%
+                  </Badge>
+                </div>
+                
+                <Progress value={accuracy} className="mb-3" />
+                
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                  <div>Attempts: {activity.total_attempts}</div>
+                  <div>Correct: {activity.correct_answers}</div>
+                </div>
+                
+                {activity.total_time_spent > 0 && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Time: {timeDisplay}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Show message if no progress data */}
+        {completeActivityList.every(activity => activity.total_attempts === 0) && (
+          <div className="text-center py-8 text-gray-500">
+            <BarChart3 className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <p className="text-lg font-medium mb-2">No progress data yet</p>
+            <p className="text-sm">
+              Start practicing with any of the available exercises to see your progress here!
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

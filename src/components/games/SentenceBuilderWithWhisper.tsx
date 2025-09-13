@@ -15,6 +15,7 @@ import { resumeAudioContext } from '@/utils/audioContext';
 import { sentenceDatabase, getRandomSentence, Sentence } from '@/data/sentences';
 import { useStudentProgress } from '@/hooks/useStudentProgress';
 import { ProgressDashboard } from '@/components/ProgressCircle';
+import { useProgress } from '@/hooks/useProgress';
 
 interface Word {
   id: string;
@@ -42,6 +43,9 @@ const SentenceBuilderWithWhisper: React.FC = () => {
     updateStudentProgress,
     forceResetAllData
   } = useStudentProgress();
+  
+  // Dashboard progress tracking
+  const { updateProgress: updateDashboardProgress } = useProgress();
   
   // State for difficulty selection and UI
   const [selectedDifficulty, setSelectedDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
@@ -147,11 +151,22 @@ const SentenceBuilderWithWhisper: React.FC = () => {
     origStartListening();
   };
   // Use the ref in processVoiceInput
-  const processVoiceInput = (transcript: string) => {
+  const processVoiceInput = async (transcript: string) => {
     setLastTranscript(transcript);
     
     const timeToComplete = (Date.now() - attemptStartTime) / 1000; // Convert to seconds
     const { accuracy, isCorrect } = recordAttempt(transcript, timeToComplete);
+    
+    // Update dashboard progress (for database)
+    try {
+      await updateDashboardProgress("sentence_builder", {
+        total_attempts: 1,
+        correct_answers: isCorrect ? 1 : 0,
+        total_time_spent: Math.max(1, Math.floor(timeToComplete / 60)) // Convert to minutes
+      });
+    } catch (error) {
+      console.error("Error updating dashboard progress:", error);
+    }
     
     if (isCorrect) {
       playSound('correct');
@@ -331,6 +346,15 @@ const SentenceBuilderWithWhisper: React.FC = () => {
           isCorrect: true,
           attempts: attempts + 1,
           timeSpent: sessionTime
+        });
+        
+        // Update dashboard progress (for database)
+        updateDashboardProgress("sentence_builder", {
+          total_attempts: 1,
+          correct_answers: 1,
+          total_time_spent: Math.max(1, Math.floor(sessionTime / 60)) // Convert to minutes
+        }).catch(error => {
+          console.error("Error updating dashboard progress:", error);
         });
         
         setTimeout(() => {

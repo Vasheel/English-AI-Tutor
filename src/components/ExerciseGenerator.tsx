@@ -29,6 +29,7 @@ const ExerciseGenerator = () => {
   const [isCorrect, setIsCorrect] = useState(false);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [feedback, setFeedback] = useState("");
   const [stats, setStats] = useState<ExerciseStats>({
     score: 0,
     totalAttempts: 0,
@@ -37,7 +38,7 @@ const ExerciseGenerator = () => {
   });
 
   const { playSound } = useSoundEffects();
-  const { updateProgress, addSession, getProgressByType } = useSupabaseProgress();
+  const { updateProgress, addSession } = useSupabaseProgress();
   const { seconds: sessionTime, getFormattedTime } = useSessionTimer();
 
   // Predefined exercises with correct answers
@@ -360,9 +361,10 @@ const ExerciseGenerator = () => {
   ];
 
   // Remove the old generator functions and replace with simple random selection
-  const generateRandomExercise = (): Exercise => {
+  const generateRandomExercise = useCallback((): Exercise => {
     return predefinedExercises[Math.floor(Math.random() * predefinedExercises.length)];
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Function to validate sentence using ChatGPT
   const validateSentenceWithAI = async (userSentence: string, requiredWords: string[]): Promise<{ isValid: boolean; feedback: string }> => {
@@ -374,7 +376,7 @@ const ExerciseGenerator = () => {
           'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "gpt-3.5-turbo",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
@@ -425,7 +427,7 @@ const ExerciseGenerator = () => {
           'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "gpt-3.5-turbo",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
@@ -484,8 +486,69 @@ const ExerciseGenerator = () => {
         });
       }
     } else {
-      // For other types, do fuzzy matching
-      isCorrect = cleanUserAnswer.toLowerCase() === cleanCorrectAnswer.toLowerCase(); // Set isCorrect here
+      // For other types, use AI-powered grammar checking
+      setIsValidating(true);
+      
+      try {
+        // Use AI to check if the user's answer is grammatically correct
+        const response = await fetch('/api/grammar/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: cleanUserAnswer,
+            mode: 'minimal',
+            dialect: 'en-US',
+            grade_level: 6
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const grammarScore = data.grammar_score || 0;
+          
+          // Check if answer is both correct and grammatically sound
+          const isExactMatch = cleanUserAnswer.toLowerCase() === cleanCorrectAnswer.toLowerCase();
+          const isGrammaticallyCorrect = grammarScore >= 80; // 80% threshold for grammar
+          
+          isCorrect = isExactMatch && isGrammaticallyCorrect;
+          
+          if (isExactMatch && !isGrammaticallyCorrect) {
+            // Answer is correct but has grammar issues
+            isCorrect = false;
+            setFeedback(`Your answer is correct, but there are grammar issues: ${data.corrected || cleanUserAnswer}`);
+          } else if (!isExactMatch && isGrammaticallyCorrect) {
+            // Grammar is good but answer is wrong
+            isCorrect = false;
+            setFeedback(`Good grammar, but the correct answer is: "${currentExercise.answer}"`);
+          } else if (!isExactMatch && !isGrammaticallyCorrect) {
+            // Both wrong - provide comprehensive feedback
+            isCorrect = false;
+            let comprehensiveFeedback = `Not quite right. The correct answer is: "${currentExercise.answer}".`;
+            
+            // Add specific grammar feedback if available
+            if (data.corrected && data.corrected !== cleanUserAnswer) {
+              comprehensiveFeedback += ` Also, there are grammar issues: ${data.corrected}`;
+            }
+            
+            // Add specific error analysis
+            if (data.tags && data.tags.length > 0) {
+              const errorTypes = data.tags.map(tag => tag.toLowerCase()).join(', ');
+              comprehensiveFeedback += ` Grammar errors found: ${errorTypes}.`;
+            }
+            
+            setFeedback(comprehensiveFeedback);
+          }
+        } else {
+          // Fallback to simple matching if AI fails
+          isCorrect = cleanUserAnswer.toLowerCase() === cleanCorrectAnswer.toLowerCase();
+        }
+      } catch (error) {
+        console.error('AI validation failed:', error);
+        // Fallback to simple matching
+        isCorrect = cleanUserAnswer.toLowerCase() === cleanCorrectAnswer.toLowerCase();
+      }
+      
+      setIsValidating(false);
       setIsCorrect(isCorrect);
       setShowResult(true);
       
@@ -499,7 +562,7 @@ const ExerciseGenerator = () => {
         playSound("incorrect");
         toast({
           title: "Not quite right",
-          description: `The correct answer is: "${currentExercise.answer}"`,
+          description: feedback || `The correct answer is: "${currentExercise.answer}"`,
           variant: "destructive",
         });
       }
@@ -517,13 +580,11 @@ const ExerciseGenerator = () => {
 
     // Update Supabase progress
     try {
-      const currentProgress = getProgressByType('grammar_exercises');
       await updateProgress("grammar_exercises", {
-        total_attempts: (currentProgress?.total_attempts || 0) + 1,
-        correct_answers: (currentProgress?.correct_answers || 0) + (isCorrect ? 1 : 0),
-        total_time_spent: (currentProgress?.total_time_spent || 0) + Math.max(1, Math.floor(sessionTime / 60)), // Convert to minutes
-        current_streak: isCorrect ? (currentProgress?.current_streak || 0) + 1 : 0,
-        best_streak: isCorrect ? Math.max((currentProgress?.best_streak || 0), (currentProgress?.current_streak || 0) + 1) : (currentProgress?.best_streak || 0)
+        total_attempts: 1,
+        correct_answers: isCorrect ? 1 : 0,
+        total_time_spent: Math.max(1, Math.floor(sessionTime / 60)), // Convert to minutes
+        best_streak: isCorrect ? 1 : 0
       });
 
       await addSession({
@@ -544,7 +605,7 @@ const ExerciseGenerator = () => {
     } catch (error) {
       console.error("Error updating grammar exercise progress:", error);
     }
-  }, [currentExercise, userAnswer, stats, playSound, updateProgress, addSession, sessionTime, getProgressByType]);
+  }, [currentExercise, userAnswer, stats, playSound, updateProgress, addSession, sessionTime, feedback]);
 
   const nextExercise = useCallback(() => {
     const newExercise = generateRandomExercise();
@@ -552,14 +613,16 @@ const ExerciseGenerator = () => {
     setUserAnswer("");
     setShowResult(false);
     setIsCorrect(false);
+    setFeedback("");
     playSound("click");
-  }, [playSound]);
+  }, [playSound, generateRandomExercise]);
 
   const retryExercise = () => {
     setUserAnswer("");
     setShowResult(false);
     setIsCorrect(false);
     setShowCorrectAnswer(false);
+    setFeedback("");
     playSound("click");
   };
 
@@ -675,8 +738,10 @@ const ExerciseGenerator = () => {
               {isValidating ? "Validating..." : isCorrect ? "Correct!" : "Not quite right"}
             </span>
           </div>
-          {currentExercise.explanation && !isValidating && (
-            <p className="text-sm mt-2">{currentExercise.explanation}</p>
+          {!isValidating && (
+            <p className="text-sm mt-2">
+              {feedback || currentExercise.explanation || "Please try again."}
+            </p>
           )}
           {!isCorrect && !isValidating && (
             <div className="mt-3 flex gap-2 justify-center">

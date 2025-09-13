@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -222,8 +223,12 @@ export default function InteractiveClozeTestSystem() {
     advanced: []
   });
   const [loadingAI, setLoadingAI] = useState(false);
+  const [startTime, setStartTime] = useState<number>(Date.now());
   // Hide the left "Select Test" list per level
   const showTestList = false;
+
+  // Progress tracking
+  const { updateProgress, addSession } = useSupabaseProgress();
 
   const currentTests = [
     ...(dynamicTests[selectedLevel] || []),
@@ -239,6 +244,7 @@ export default function InteractiveClozeTestSystem() {
     setTestResult(null);
     setShowHints(false);
     setAnimateCorrect([]);
+    setStartTime(Date.now()); // Reset timer for new test
   }, [selectedLevel, selectedTestIndex, currentTest.answers.length]);
 
   const handleAnswerChange = (index: number, value: string) => {
@@ -259,7 +265,7 @@ export default function InteractiveClozeTestSystem() {
     return variations[correctAnswer.toLowerCase()] || [correctAnswer.toLowerCase()];
   };
 
-  const checkAnswers = () => {
+  const checkAnswers = async () => {
     let correct = 0;
     const incorrectIndices: number[] = [];
     const newAnimateCorrect: number[] = [];
@@ -297,6 +303,45 @@ export default function InteractiveClozeTestSystem() {
     setShowResults(true);
     setAnimateCorrect(newAnimateCorrect);
 
+    // Update progress tracking
+    const timeSpent = Math.max(1, Math.floor((Date.now() - startTime) / 1000)); // in seconds
+    const isCorrect = percentage >= 70; // 70% threshold for "correct" attempt
+    
+    try {
+      // Update Supabase progress
+      await updateProgress("cloze", {
+        total_attempts: 1, // This will be incremented by the hook
+        correct_answers: isCorrect ? 1 : 0,
+        total_time_spent: timeSpent,
+        current_streak: isCorrect ? 1 : 0,
+        best_streak: isCorrect ? 1 : 0
+      });
+
+      // Add session record
+      await addSession({
+        user_id: '', // Will be filled by the hook
+        activity_type: 'cloze',
+        score: correct,
+        total_questions: total,
+        time_spent: timeSpent,
+        difficulty_level: selectedLevel,
+        session_data: {
+          cloze_data: {
+            test_id: currentTest.id,
+            test_title: currentTest.title,
+            level: selectedLevel,
+            user_answers: userAnswers,
+            correct_answers: currentTest.answers,
+            score: correct,
+            total: total,
+            percentage: percentage
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Error updating cloze test progress:", error);
+    }
+
     // Animate correct answers
     setTimeout(() => {
       setAnimateCorrect([]);
@@ -309,6 +354,7 @@ export default function InteractiveClozeTestSystem() {
     setShowAnswers(false);
     setTestResult(null);
     setShowHints(false);
+    setStartTime(Date.now()); // Reset timer for new attempt
   };
 
   const revealAnswers = () => {

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import ClozeTestComponent from "@/components/ClozeTestComponent";
+import { useProgress } from '@/hooks/useProgress';
 
 type Difficulty = "beginner" | "intermediate" | "advanced";
 

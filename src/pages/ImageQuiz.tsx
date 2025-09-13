@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { useProgress } from '@/hooks/useProgress';
 import { Progress } from '@/components/ui/progress';
 import { 
   Image, 
@@ -55,15 +56,27 @@ interface ValidationResult {
 // AI evaluation result
 interface AIResult {
   corrected: string;
+  grammar_corrected?: string;  // Original grammar-only correction
   grammar_score: number;
   context_score: number;
   context_passed: boolean;
   score: number;
   explanations?: string[];
   context_feedback?: string[];
+  confidence?: string;
 }
 
-// Flexible validation function that's more forgiving
+// Request body for grammar evaluation
+interface GrammarRequest {
+  text: string;
+  mode: string;
+  dialect: string;
+  grade_level: number;
+  image_url?: string;
+  image_id?: string | null;
+}
+
+// Flexible validation function that's more forgiving (kept as fallback)
 const validateImageDescription = (
   userDescription: string,
   correctKeywords: string[],
@@ -132,16 +145,16 @@ const validateImageDescription = (
   const suggestions: string[] = [];
   
   if (finalScore === 100) {
-    feedback = '🎉 Excellent! Perfect description!';
+    feedback = 'Excellent! Perfect description!';
   } else if (finalScore >= 80) {
-    feedback = '👍 Great job! Your description captures the image well.';
+    feedback = 'Great job! Your description captures the image well.';
   } else if (finalScore >= 60) {
-    feedback = '✅ Good attempt! You got most of the key elements.';
+    feedback = 'Good attempt! You got most of the key elements.';
     if (missedKeywords.length > 0) {
       suggestions.push(`Try mentioning: ${missedKeywords.join(', ')}`);
     }
   } else {
-    feedback = '📝 Description needs improvement.';
+    feedback = 'Description needs improvement.';
     suggestions.push(`Include these key elements: ${missedKeywords.join(', ')}`);
     suggestions.push('Be more specific about what you see in the image.');
   }
@@ -154,6 +167,16 @@ const validateImageDescription = (
     suggestions,
     isCorrect: finalScore >= 60
   };
+};
+
+// Function to convert relative paths to full URLs for the API
+const getFullImageUrl = (imagePath: string): string => {
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // Convert relative path to full URL
+  const baseUrl = window.location.origin;
+  return imagePath.startsWith('/') ? `${baseUrl}${imagePath}` : `${baseUrl}/${imagePath}`;
 };
 
 // Main Component
@@ -173,13 +196,30 @@ export default function ImageDescriptionQuiz({
   const [userDescription, setUserDescription] = useState('');
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [showHints, setShowHints] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  const [bestScore, setBestScore] = useState(0);
+  const [attempts, setAttempts] = useState(() => {
+    // Load attempts from localStorage
+    const savedAttempts = localStorage.getItem('imageQuiz_attempts');
+    return savedAttempts ? parseInt(savedAttempts, 10) : 0;
+  });
+  const [bestScore, setBestScore] = useState(() => {
+    // Load best score from localStorage
+    const savedBestScore = localStorage.getItem('imageQuiz_bestScore');
+    return savedBestScore ? parseInt(savedBestScore, 10) : 0;
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
+  const [useVisionAPI, setUseVisionAPI] = useState(true); // Toggle for vision API
+
+  // Progress tracking
+  const { updateProgress, fetchProgress } = useProgress();
+  const [startTime, setStartTime] = useState<number>(Date.now());
 
   // Level + rotating images loaded from backend
-  const [currentLevel, setCurrentLevel] = useState<'easy' | 'medium' | 'hard'>(difficulty);
+  const [currentLevel, setCurrentLevel] = useState<'easy' | 'medium' | 'hard'>(() => {
+    // Load last level from localStorage, fallback to difficulty prop
+    const savedLevel = localStorage.getItem('imageQuiz_lastLevel') as 'easy' | 'medium' | 'hard';
+    return savedLevel || difficulty;
+  });
   const [images, setImages] = useState<PromptImage[]>([]);
   const [imgIndex, setImgIndex] = useState(0);
   const [reqKeywords, setReqKeywords] = useState<string[]>(correctKeywords);
@@ -190,24 +230,63 @@ export default function ImageDescriptionQuiz({
   const progress = Math.min(100, (wordCount / minWordCount) * 100);
   const isOverLimit = wordCount > maxWords;
 
+  // Save data to localStorage
+  const saveToLocalStorage = (key: string, value: string | number) => {
+    localStorage.setItem(key, value.toString());
+  };
+
+  // Update attempts and save to localStorage
+  const updateAttempts = (newAttempts: number) => {
+    setAttempts(newAttempts);
+    saveToLocalStorage('imageQuiz_attempts', newAttempts);
+  };
+
+  // Update best score and save to localStorage
+  const updateBestScore = (newBestScore: number) => {
+    setBestScore(newBestScore);
+    saveToLocalStorage('imageQuiz_bestScore', newBestScore);
+  };
+
+  // Update current level and save to localStorage
+  const updateCurrentLevel = (newLevel: 'easy' | 'medium' | 'hard') => {
+    setCurrentLevel(newLevel);
+    saveToLocalStorage('imageQuiz_lastLevel', newLevel);
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    const submitStartTime = Date.now(); // Track submission start time
+    
     try {
-      // Ensure we pass the ID that matches the image actually shown
+      // Get current image URL
       const shownPath = images[imgIndex]?.path || imageUrl;
       const currentImage = images.find(i => i.path === shownPath) || images[imgIndex];
+      
+      // Prepare request body
+      const requestBody: GrammarRequest = {
+        text: userDescription,
+        mode: 'minimal',
+        dialect: 'en-US',
+        grade_level: 6
+      };
+  
+      // Add image information based on vision API preference
+      if (useVisionAPI) {
+        // Convert to full URL for vision API
+        requestBody.image_url = getFullImageUrl(shownPath);
+      } else {
+        // Use image_id for metadata-based validation
+        requestBody.image_id = currentImage?.id || null;
+      }
+  
       const res = await fetch('/api/grammar/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: userDescription,
-          image_id: currentImage?.id || null,
-          mode: 'minimal',
-          dialect: 'en-US',
-          grade_level: 6
-        })
+        body: JSON.stringify(requestBody)
       });
+  
       if (!res.ok) throw new Error('Evaluation failed');
+      
       const data = await res.json();
       const mapped: AIResult = {
         corrected: data.corrected,
@@ -216,28 +295,99 @@ export default function ImageDescriptionQuiz({
         context_passed: data.context_passed ?? true,
         score: data.score ?? data.grammar_score ?? 0,
         explanations: data.explanations,
-        context_feedback: data.context_feedback
+        context_feedback: data.context_feedback,
+        confidence: data.confidence
       };
+      
       setAiResult(mapped);
       setValidationResult(null);
       setAttempts(prev => prev + 1);
-      if ((mapped.score ?? 0) > bestScore) setBestScore(mapped.score ?? 0);
-      if (onComplete && (mapped.context_passed || (mapped.grammar_score ?? 0) >= 60)) onComplete(mapped.score ?? 0);
+      
+      if ((mapped.score ?? 0) > bestScore) {
+        setBestScore(mapped.score ?? 0);
+      }
+      
+      // Calculate time spent on this attempt
+      const timeSpentSeconds = Math.floor((Date.now() - startTime) / 1000);
+      const isCorrect = mapped.context_passed && (mapped.score ?? 0) >= 60;
+      
+      // Track progress in database
+      try {
+        const progressUpdate = {
+          total_attempts: 1,
+          correct_answers: isCorrect ? 1 : 0,
+          total_time_spent: Math.max(1, timeSpentSeconds), // Minimum 1 second
+          best_streak: isCorrect ? 1 : 0
+        };
+        
+        console.log(`📈 Image Quiz Progress Update:`, progressUpdate);
+        console.log(`⏱️ Time spent: ${timeSpentSeconds} seconds`);
+        console.log(`✅ Correct: ${isCorrect} (Score: ${mapped.score}, Context passed: ${mapped.context_passed})`);
+        
+        await updateProgress("image_quiz", progressUpdate);
+        
+        // Refresh progress data to update dashboard
+        await fetchProgress();
+        
+        console.log(`✅ Image quiz progress updated successfully`);
+      } catch (error) {
+        console.error("Error updating image quiz progress:", error);
+      }
+      
+      if (onComplete && isCorrect) {
+        onComplete(mapped.score ?? 0);
+      }
+      
+      // Reset timer for next attempt
+      setStartTime(Date.now());
+      
     } catch (e) {
+      console.error('API evaluation failed:', e);
+      
+      // Calculate time spent for fallback as well
+      const timeSpentSeconds = Math.floor((Date.now() - startTime) / 1000);
+      
       // Fallback to local validator
-      const result = validateImageDescription(
-        userDescription,
+    const result = validateImageDescription(
+      userDescription,
         reqKeywords,
         optKeywords,
-        minWordCount
-      );
+      minWordCount
+    );
       setAiResult(null);
-      setValidationResult(result);
+    setValidationResult(result);
       setAttempts(prev => prev + 1);
-      if (result.score > bestScore) setBestScore(result.score);
-      if (onComplete && result.isCorrect) onComplete(result.score);
+    
+    if (result.score > bestScore) {
+      setBestScore(result.score);
+    }
+      
+      // Track progress even with fallback validation
+      try {
+        const progressUpdate = {
+          total_attempts: 1,
+          correct_answers: result.isCorrect ? 1 : 0,
+          total_time_spent: Math.max(1, timeSpentSeconds),
+          best_streak: result.isCorrect ? 1 : 0
+        };
+        
+        console.log(`📈 Image Quiz Fallback Progress Update:`, progressUpdate);
+        await updateProgress("image_quiz", progressUpdate);
+        await fetchProgress();
+        console.log(`✅ Image quiz fallback progress updated`);
+      } catch (error) {
+        console.error("Error updating image quiz fallback progress:", error);
+      }
+    
+    if (onComplete && result.isCorrect) {
+      onComplete(result.score);
+    }
+    
+      // Reset timer for next attempt
+      setStartTime(Date.now());
+      
     } finally {
-      setIsSubmitting(false);
+    setIsSubmitting(false);
     }
   };
 
@@ -246,6 +396,7 @@ export default function ImageDescriptionQuiz({
     setValidationResult(null);
     setAiResult(null);
     setShowHints(false);
+    setStartTime(Date.now());
   };
 
   const getDifficultyColor = () => {
@@ -264,8 +415,16 @@ export default function ImageDescriptionQuiz({
         const res = await fetch(`/api/images/list?level=${currentLevel}`);
         if (!res.ok) throw new Error('Failed to load images');
         const data: PromptImage[] = await res.json();
-        setImages(Array.isArray(data) ? data : []);
-        setImgIndex(0);
+        const imageList = Array.isArray(data) ? data : [];
+        setImages(imageList);
+        
+        // Randomize initial image index
+        if (imageList.length > 0) {
+          const randomIndex = Math.floor(Math.random() * imageList.length);
+          setImgIndex(randomIndex);
+        } else {
+          setImgIndex(0);
+        }
       } catch (e) {
         console.error('Image list fetch failed:', e);
         setImages([]);
@@ -283,6 +442,7 @@ export default function ImageDescriptionQuiz({
     setValidationResult(null);
     setUserDescription('');
     setAiResult(null);
+    setStartTime(Date.now());
   };
 
   // Derive dynamic keywords from current image metadata/title/alt
@@ -295,7 +455,8 @@ export default function ImageDescriptionQuiz({
         .split(/\s+/)
         .filter(w => w.length >= 3);
 
-    if (img) {
+    if (img && !useVisionAPI) {
+      // Only use metadata keywords if not using vision API
       const objects = img.objects || [];
       const actions = img.actions || [];
       const locations = img.locations || [];
@@ -329,13 +490,23 @@ export default function ImageDescriptionQuiz({
       if (!sameA) setReqKeywords(withFallbackReq);
       if (!sameB) setOptKeywords(optional);
     } else {
-      // No backend image yet – keep props
-      // Do not re-derive from default arrays each render; leave initial state
+      // When using vision API, keep original keywords as fallback
+      // Don't update keywords since vision API will handle validation directly
+      if (reqKeywords.length === 0) {
+        setReqKeywords(correctKeywords);
+      }
+      if (optKeywords.length === 0) {
+        setOptKeywords(optionalKeywords || []);
+      }
     }
-  }, [images, imgIndex, reqKeywords, optKeywords]);
+  }, [images, imgIndex, useVisionAPI, correctKeywords, optionalKeywords, reqKeywords, optKeywords]);
 
-  // Build a simple example sentence based on derived keywords
+  // Build a simple example description based on derived keywords
   const exampleDescription = (() => {
+    if (useVisionAPI) {
+      return 'Describe what you see in the image with details about the subject, action, and setting.';
+    }
+    
     const [obj1, obj2] = reqKeywords;
     const act = reqKeywords.find(k => /ing$/.test(k)) || optKeywords.find(k => /ing$/.test(k));
     const loc = optKeywords.find(k => ['beach','park','garden','classroom','kitchen','forest','street','room','library'].includes(k));
@@ -352,6 +523,12 @@ export default function ImageDescriptionQuiz({
           <CardTitle className="flex items-center gap-2 text-2xl">
             <Image className="w-8 h-8" />
             Image Description Quiz
+            {useVisionAPI && (
+              <Badge className="bg-white/20 text-white border-white/30">
+                <Sparkles className="w-3 h-3 mr-1" />
+                AI Vision
+              </Badge>
+            )}
           </CardTitle>
           <p className="text-white/90 mt-2">
             Write a sentence describing what you see in the image.
@@ -370,7 +547,7 @@ export default function ImageDescriptionQuiz({
             </div>
           </div>
 
-          {/* Level selector + Next image */}
+          {/* Level selector + Next image + Vision API toggle */}
           <div className="flex flex-wrap items-center gap-3">
             {(['easy','medium','hard'] as const).map(lvl => (
               <Button
@@ -378,13 +555,24 @@ export default function ImageDescriptionQuiz({
                 size="sm"
                 variant={currentLevel === lvl ? 'default' : 'outline'}
                 className="capitalize"
-                onClick={() => setCurrentLevel(lvl)}
+                onClick={() => updateCurrentLevel(lvl)}
               >
                 {lvl}
               </Button>
             ))}
-            <div className="ml-auto">
-              <Button onClick={nextImage} size="sm" variant="outline">Next Image →</Button>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                onClick={() => setUseVisionAPI(!useVisionAPI)}
+                size="sm"
+                variant={useVisionAPI ? 'default' : 'outline'}
+                className="gap-2"
+              >
+                {useVisionAPI ? <Eye className="w-3 h-3" /> : <Brain className="w-3 h-3" />}
+                {useVisionAPI ? 'AI Vision' : 'Keywords'}
+              </Button>
+              <Button onClick={nextImage} size="sm" variant="outline">
+                Next Image →
+              </Button>
             </div>
           </div>
 
@@ -400,6 +588,25 @@ export default function ImageDescriptionQuiz({
                 <Eye className="w-3 h-3 mr-1" />
                 Observe Carefully
               </Badge>
+            </div>
+          </div>
+
+          {/* Analysis Mode Indicator */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 border border-blue-200">
+            <div className="flex items-center gap-2 text-sm">
+              {useVisionAPI ? (
+                <>
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  <span className="text-purple-700 font-medium">AI Vision Mode:</span>
+                  <span className="text-gray-600">The AI will analyze the actual image to check your description</span>
+                </>
+              ) : (
+                <>
+                  <Brain className="w-4 h-4 text-blue-600" />
+                  <span className="text-blue-700 font-medium">Keyword Mode:</span>
+                  <span className="text-gray-600">Checking against predefined keywords: {reqKeywords.join(', ')}</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -465,7 +672,7 @@ export default function ImageDescriptionQuiz({
               {isSubmitting ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  Checking...
+                  {useVisionAPI ? 'Analyzing Image...' : 'Checking...'}
                 </>
               ) : (
                 <>
@@ -485,44 +692,88 @@ export default function ImageDescriptionQuiz({
             </Button>
           </div>
 
-          {/* AI Results */}
+          {/* AI Results - Landscape Layout */}
           {aiResult && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-semibold mb-2">Your sentence:</h4>
-                  <p className="text-gray-700">{userDescription}</p>
-                </div>
-                {aiResult.corrected && aiResult.corrected !== userDescription && (
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2">✏️ Corrected:</h4>
-                    <p className="text-green-700">{aiResult.corrected}</p>
+            <div className="space-y-6">
+              {/* Landscape Layout: Image Left, Results Right */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Side - Image */}
+                <div className="relative rounded-lg overflow-hidden border-4 border-gray-200 shadow-lg">
+                  <img 
+                    src={displayedUrl} 
+                    alt="Describe this image"
+                    className="w-full h-auto object-cover"
+                  />
+                  <div className="absolute top-2 right-2">
+                    <Badge className="bg-black/50 text-white">
+                      <Eye className="w-3 h-3 mr-1" />
+                      Observe Carefully
+                    </Badge>
                   </div>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{aiResult.grammar_score}</div>
-                  <div className="text-sm text-gray-600">Grammar Score</div>
                 </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{aiResult.context_score}</div>
-                  <div className="text-sm text-gray-600">Context Score</div>
+                
+                {/* Right Side - Results */}
+                <div className="space-y-4">
+                  {/* Your Sentence vs Corrected */}
+                  <div className="space-y-3">
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="font-semibold mb-2 text-lg">Your sentence:</h4>
+                      <p className="text-gray-700 text-lg">{userDescription}</p>
+                    </div>
+                    {aiResult.corrected && aiResult.corrected !== userDescription && (
+                      <div className="bg-green-50 p-4 rounded-lg">
+                        <h4 className="font-semibold mb-2 text-lg">✏️ Corrected (Grammar + Context):</h4>
+                        <p className="text-green-700 text-lg font-medium">{aiResult.corrected}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+              
+              {/* Scores Section */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center p-6 bg-blue-50 rounded-lg">
+                  <div className="text-4xl font-bold text-blue-600">{aiResult.grammar_score}</div>
+                  <div className="text-lg text-gray-600 font-medium">Grammar Score</div>
+                </div>
+                <div className="text-center p-6 bg-green-50 rounded-lg">
+                  <div className="text-4xl font-bold text-green-600">{aiResult.context_score}</div>
+                  <div className="text-lg text-gray-600 font-medium">Context Score</div>
+                </div>
+                <div className="text-center p-6 bg-purple-50 rounded-lg">
+                  <div className="text-4xl font-bold text-purple-600">{aiResult.score}</div>
+                  <div className="text-lg text-gray-600 font-medium">Final Score</div>
+                </div>
+              </div>
+
+              {/* Confidence Indicator */}
+              {aiResult.confidence && (
+                <div className="text-center">
+                  <Badge 
+                    className={`${
+                      aiResult.confidence === 'high' 
+                        ? 'bg-green-100 text-green-700 border-green-200' 
+                        : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                    }`}
+                  >
+                    {aiResult.confidence === 'high' ? '🎯 High Confidence' : '⚠️ Medium Confidence'}
+                    {useVisionAPI ? ' (AI Vision)' : ' (Keywords)'}
+                  </Badge>
+                </div>
+              )}
               
               {/* Detailed Context Feedback */}
               {aiResult.context_feedback && aiResult.context_feedback.length > 0 && (
                 <Alert className={`${aiResult.context_score >= 80 ? 'bg-green-50 border-green-200' : aiResult.context_score >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'}`}>
-                  <div className='flex items-start gap-2'>
-                    <AlertCircle className={`w-5 h-5 mt-0.5 ${aiResult.context_score >= 80 ? 'text-green-600' : aiResult.context_score >= 60 ? 'text-yellow-600' : 'text-red-600'}`} />
+                  <div className='flex items-start gap-3'>
+                    <AlertCircle className={`w-6 h-6 mt-1 ${aiResult.context_score >= 80 ? 'text-green-600' : aiResult.context_score >= 60 ? 'text-yellow-600' : 'text-red-600'}`} />
                     <div className='flex-1'>
-                      <p className='font-semibold'>
-                        {aiResult.context_score >= 80 ? 'Great description!' : 
+                      <p className='font-semibold text-lg'>
+                        {aiResult.context_score >= 80 ? 'Excellent description!' : 
                          aiResult.context_score >= 60 ? 'Good description, but could be better.' : 
                          'Description needs improvement.'}
                       </p>
-                      <ul className='mt-2 list-disc list-inside text-sm text-gray-700'>
+                      <ul className='mt-3 list-disc list-inside text-base text-gray-700 space-y-1'>
                         {aiResult.context_feedback.map((feedback: string, i: number) => (
                           <li key={i}>{feedback}</li>
                         ))}
@@ -535,11 +786,11 @@ export default function ImageDescriptionQuiz({
               {/* Additional explanations if any */}
               {aiResult.explanations && aiResult.explanations.length > 0 && (
                 <Alert className='bg-blue-50 border-blue-200'>
-                  <div className='flex items-start gap-2'>
-                    <AlertCircle className='w-5 h-5 text-blue-600 mt-0.5' />
+                  <div className='flex items-start gap-3'>
+                    <AlertCircle className='w-6 h-6 text-blue-600 mt-1' />
                     <div className='flex-1'>
-                      <p className='font-semibold'>Additional feedback:</p>
-                      <ul className='mt-2 list-disc list-inside text-sm text-gray-700'>
+                      <p className='font-semibold text-lg'>Additional feedback:</p>
+                      <ul className='mt-3 list-disc list-inside text-base text-gray-700 space-y-1'>
                         {aiResult.explanations.map((h: string, i: number) => (
                           <li key={i}>{h}</li>
                         ))}

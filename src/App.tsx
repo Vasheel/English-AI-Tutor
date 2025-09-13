@@ -17,7 +17,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import VoiceControls from "@/components/VoiceControls";
 import ChatBot from "@/components/ChatBot";
-import { ProgressProvider } from "./components/games/ProgressContext";
+import { ProgressProvider } from "@/contexts/ProgressContext";
 import ExerciseGenerator from "@/components/ExerciseGenerator";
 import AIQuestionDemo from "@/components/AIQuestionDemo";
 import AdaptiveQuizSystem from "@/components/AdaptiveQuizSystem";
@@ -33,10 +33,11 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+      <ProgressProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <div className="min-h-screen bg-background">
             <Routes>
               <Route path="/auth" element={<Auth />} />
@@ -141,7 +142,8 @@ const App = () => (
             />
           </div>
         </BrowserRouter>
-      </TooltipProvider>
+        </TooltipProvider>
+      </ProgressProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

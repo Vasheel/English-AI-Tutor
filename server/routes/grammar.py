@@ -4,6 +4,8 @@ from difflib import ndiff
 import os
 from openai import OpenAI
 import re
+import base64
+import json
 from typing import Dict, List, Tuple
 
 router = APIRouter(prefix="/api/grammar", tags=["grammar"])
@@ -12,70 +14,155 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 class EvalRequest(BaseModel):
     text: str
     image_id: str | None = None
+    image_url: str | None = None  # New field for direct image analysis
     mode: str | None = "minimal"   # "minimal" | "fluency"
     dialect: str | None = "en-GB"  # or "en-US"
     grade_level: int | None = 6
 
-# Synonym mappings for context validation
-SYNONYM_MAP = {
-    # Objects
-    "dog": ["puppy", "canine", "pet"],
-    "cat": ["kitten", "feline", "pet"],
-    "boy": ["kid", "child", "youngster", "lad"],
-    "girl": ["kid", "child", "youngster", "lass"],
-    "children": ["kids", "boys", "girls", "youngsters"],
-    "ball": ["sphere", "toy"],
-    "book": ["textbook", "novel", "reading material"],
-    "car": ["vehicle", "automobile", "auto"],
-    "tree": ["plant", "sapling"],
-    "flower": ["bloom", "blossom", "petal"],
-    "house": ["home", "building", "residence"],
-    "school": ["classroom", "building", "education"],
-    "park": ["playground", "garden", "outdoor area"],
-    "beach": ["shore", "coast", "sand"],
-    "mountain": ["peak", "hill", "cliff"],
-    "ocean": ["sea", "water", "waves"],
-    
-    # Actions
-    "play": ["playing", "plays", "played", "game"],
-    "run": ["running", "runs", "ran", "jog"],
-    "walk": ["walking", "walks", "walked", "stroll"],
-    "eat": ["eating", "eats", "ate", "dining"],
-    "sleep": ["sleeping", "sleeps", "slept", "resting"],
-    "read": ["reading", "reads", "studying"],
-    "cook": ["cooking", "cooks", "preparing"],
-    "drive": ["driving", "drives", "drove", "traveling"],
-    "swim": ["swimming", "swims", "swam"],
-    "jump": ["jumping", "jumps", "jumped", "leap"],
-    "sit": ["sitting", "sits", "sat", "seated"],
-    "stand": ["standing", "stands", "stood"],
-    "hold": ["holding", "holds", "held", "carrying"],
-    "feed": ["feeding", "feeds", "fed", "giving"],
-    
-    # Locations
-    "home": ["house", "residence", "indoors"],
-    "outside": ["outdoors", "exterior", "open air"],
-    "inside": ["indoors", "interior", "within"],
-    "street": ["road", "avenue", "urban"],
-    "city": ["urban", "town", "metropolitan"],
-    "garden": ["yard", "outdoor area", "plants"],
-    "kitchen": ["cooking area", "food preparation"],
-    "classroom": ["school", "learning area", "education"],
-    "library": ["reading room", "book area", "study"],
-    "forest": ["woods", "trees", "nature"],
-    "field": ["meadow", "grassland", "open area"],
-}
+def encode_image_from_url(image_url: str) -> str:
+    """Convert image URL to base64 for OpenAI API"""
+    import requests
+    try:
+        response = requests.get(image_url)
+        response.raise_for_status()
+        return base64.b64encode(response.content).decode('utf-8')
+    except Exception as e:
+        print(f"Error encoding image: {e}")
+        return ""
 
+def validate_with_vision(student_text: str, image_url: str, grade_level: int = 6) -> Tuple[int, List[str], bool, List[str]]:
+    """
+    Use GPT-4o vision to validate student description against actual image
+    Returns: (context_score, hints, context_passed, feedback_parts)
+    """
+    try:
+        # Encode image
+        base64_image = encode_image_from_url(image_url)
+        if not base64_image:
+            return 100, [], True, ["Could not analyze image - using text only validation"]
+        
+        # Simplified prompt that asks for structured but not JSON response
+        system_prompt = f"""You are an educational AI helping Grade {grade_level} students describe images accurately. 
+
+Analyze the student's description and provide feedback in this exact format:
+
+CONTEXT_SCORE: [number 0-100]
+CONTEXT_PASSED: [true/false]
+ACCURATE_ELEMENTS: [comma-separated list or "none"]
+INACCURATE_ELEMENTS: [comma-separated list or "none"]
+MISSING_ELEMENTS: [comma-separated list or "none"]
+FEEDBACK: [2-3 sentences of educational feedback]
+
+Be encouraging but accurate. Point out specific inaccuracies clearly."""
+
+        user_prompt = f"""Student wrote: "{student_text}"
+
+Please analyze this description of the image and respond in the exact format requested."""
+
+        # Call GPT-4o vision
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user", 
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}",
+                                "detail": "high"
+                            }
+                        }
+                    ]
+                }
+            ],
+            temperature=0.3,
+            max_tokens=800
+        )
+        
+        # Parse structured response
+        content = response.choices[0].message.content
+        print(f"Vision API Response: {content}")  # Debug log
+        
+        # Extract information using regex
+        context_score = 80  # default
+        context_passed = True  # default
+        accurate_elements = []
+        inaccurate_elements = []
+        missing_elements = []
+        feedback_text = "Analysis completed."
+        
+        # Parse the response
+        if "CONTEXT_SCORE:" in content:
+            score_match = re.search(r"CONTEXT_SCORE:\s*(\d+)", content)
+            if score_match:
+                context_score = int(score_match.group(1))
+        
+        if "CONTEXT_PASSED:" in content:
+            passed_match = re.search(r"CONTEXT_PASSED:\s*(true|false)", content, re.IGNORECASE)
+            if passed_match:
+                context_passed = passed_match.group(1).lower() == "true"
+        
+        if "ACCURATE_ELEMENTS:" in content:
+            acc_match = re.search(r"ACCURATE_ELEMENTS:\s*([^\n]+)", content)
+            if acc_match and acc_match.group(1).strip().lower() != "none":
+                accurate_elements = [x.strip() for x in acc_match.group(1).split(",")]
+        
+        if "INACCURATE_ELEMENTS:" in content:
+            inacc_match = re.search(r"INACCURATE_ELEMENTS:\s*([^\n]+)", content)
+            if inacc_match and inacc_match.group(1).strip().lower() != "none":
+                inaccurate_elements = [x.strip() for x in inacc_match.group(1).split(",")]
+        
+        if "MISSING_ELEMENTS:" in content:
+            miss_match = re.search(r"MISSING_ELEMENTS:\s*([^\n]+)", content)
+            if miss_match and miss_match.group(1).strip().lower() != "none":
+                missing_elements = [x.strip() for x in miss_match.group(1).split(",")]
+        
+        if "FEEDBACK:" in content:
+            feedback_match = re.search(r"FEEDBACK:\s*(.+)", content, re.DOTALL)
+            if feedback_match:
+                feedback_text = feedback_match.group(1).strip()
+        
+        # Build hints and feedback
+        hints = []
+        feedback_parts = []
+        
+        # Add accurate elements feedback
+        if accurate_elements:
+            feedback_parts.append(f"✓ You correctly mentioned: {', '.join(accurate_elements)}")
+        
+        # Add inaccurate elements feedback with specific corrections
+        if inaccurate_elements:
+            for item in inaccurate_elements:
+                hints.append(f"Correction needed: {item}")
+                feedback_parts.append(f"⚠ Inaccurate: {item}")
+        
+        # Add missing elements feedback
+        if missing_elements:
+            for item in missing_elements:
+                hints.append(f"Consider adding: {item}")
+                feedback_parts.append(f"💡 Could mention: {item}")
+        
+        # Add general feedback
+        feedback_parts.append(f"Overall: {feedback_text}")
+        
+        return context_score, hints, context_passed, feedback_parts
+        
+    except Exception as e:
+        print(f"Vision API error: {e}")
+        # Fallback to neutral score with error message
+        return 60, [f"Vision analysis failed: {str(e)}"], False, [f"Could not analyze image: {str(e)}"]
+
+# Keep all existing helper functions...
 def lemmatize_word(word: str) -> str:
     """Simple lemmatization - remove common suffixes"""
     word = word.lower().strip()
-    
-    # Remove common suffixes
     suffixes = ['ing', 'ed', 's', 'es', 'ly', 'er', 'est']
     for suffix in suffixes:
         if word.endswith(suffix) and len(word) > len(suffix) + 2:
             word = word[:-len(suffix)]
-    
     return word
 
 def get_synonyms(word: str) -> List[str]:
@@ -83,211 +170,123 @@ def get_synonyms(word: str) -> List[str]:
     word = word.lower().strip()
     synonyms = [word]
     
-    # Check if word is a key in synonym map
+    # Simple synonym mapping (you can expand this)
+    SYNONYM_MAP = {
+        "dog": ["puppy", "canine", "pet"],
+        "cat": ["kitten", "feline", "pet"],
+        "teacher": ["instructor", "educator", "professor"],
+        "student": ["pupil", "learner"],
+        "man": ["person", "male", "guy"],
+        "woman": ["person", "female", "lady"],
+        "writing": ["writing", "drawing", "marking"],
+        "board": ["blackboard", "whiteboard", "chalkboard"],
+        "sweater": ["jumper", "pullover", "cardigan"],
+        "shirt": ["top", "blouse", "clothing"]
+    }
+    
     for key, values in SYNONYM_MAP.items():
         if word == key or word in values:
             synonyms.extend([key] + values)
             break
     
-    return list(set(synonyms))  # Remove duplicates
+    return list(set(synonyms))
 
 def validate_context(student_text: str, image_metadata: Dict) -> Tuple[int, List[str], bool]:
-    """
-    Validate if student text matches image context
-    Returns: (context_score, hints, context_passed)
-    """
+    """Original metadata-based validation (kept as fallback)"""
     if not image_metadata:
         return 100, [], True
     
-    # Extract metadata
     objects = list(image_metadata.get("objects", []))
     actions = list(image_metadata.get("actions", []))
     locations = list(image_metadata.get("locations", []))
-
-    # Expand metadata from title/alt as a fallback (helps when lists are incomplete)
-    title_alt = f"{image_metadata.get('title','')} {image_metadata.get('alt','')}"
-    meta_words = re.findall(r"\b\w+\b", title_alt.lower())
-
-    action_keys = {
-        "play","run","walk","eat","sleep","read","cook","drive","swim","jump","sit","stand","hold","feed"
-    }
-    location_keys = {
-        "home","outside","inside","street","city","garden","kitchen","classroom","library","forest","field","beach","park","room","windowsill","chair"
-    }
-
-    for w in meta_words:
-        base = lemmatize_word(w)
-        if base in action_keys and base not in actions:
-            actions.append(base)
-        elif base in location_keys and base not in locations:
-            locations.append(base)
-        else:
-            if base not in objects and base not in action_keys and base not in location_keys and len(base) > 2:
-                objects.append(base)
     
-    # Clean and lemmatize student text
+    # Basic validation logic
     words = re.findall(r'\b\w+\b', student_text.lower())
     lemmatized_words = [lemmatize_word(word) for word in words]
     
-    # Check matches
-    object_matches = 0
-    action_matches = 0
-    location_matches = 0
+    object_matches = sum(1 for obj in objects if any(word in get_synonyms(obj) for word in lemmatized_words))
+    action_matches = sum(1 for action in actions if any(word in get_synonyms(action) for word in lemmatized_words))
+    location_matches = sum(1 for location in locations if any(word in get_synonyms(location) for word in lemmatized_words))
     
-    # Check objects (give credit for any one relevant object)
-    for obj in objects:
-        obj_synonyms = get_synonyms(obj)
-        if any(word in obj_synonyms for word in lemmatized_words):
-            object_matches += 1
-            break
-    
-    # Check actions (sleeping/sleep etc.)
-    for action in actions:
-        action_synonyms = get_synonyms(action)
-        if any(word in action_synonyms for word in lemmatized_words):
-            action_matches += 1
-            break
-    
-    # Check locations (credit if any location term appears)
-    for location in locations:
-        location_synonyms = get_synonyms(location)
-        if any(word in location_synonyms for word in lemmatized_words):
-            location_matches += 1
-            break
-    
-    # Calculate context score
-    # Score with softer thresholds; object OR action should be enough to pass
-    # Also reward close synonyms more than locations
-    context_score = 0
-    if object_matches > 0:
-        context_score += 70
-    if action_matches > 0:
-        context_score += 25
-    if location_matches > 0:
-        context_score += 5
-    
-    # Generate detailed feedback
+    context_score = min(100, (object_matches * 40) + (action_matches * 30) + (location_matches * 20) + 10)
+    context_passed = object_matches > 0 or action_matches > 0
     hints = []
-    feedback_parts = []
     
-    # Object feedback
-    if object_matches == 0 and objects:
-        hints.append(f"Your sentence doesn't mention the main subject I see. Try including it. (Hint: {objects[0]})")
-        feedback_parts.append(f"Missing main subject: {objects[0]}")
-    elif object_matches > 0:
-        feedback_parts.append(f"✓ Good job mentioning the subject!")
+    if not context_passed:
+        if objects:
+            hints.append(f"Try mentioning the main subject: {objects[0]}")
+        if actions:
+            hints.append(f"Describe what's happening: {actions[0]}")
     
-    # Action feedback
-    if action_matches == 0 and actions:
-        hints.append(f"Try describing what's happening. (Hint: {actions[0]})")
-        feedback_parts.append(f"Missing action: {actions[0]}")
-    elif action_matches > 0:
-        feedback_parts.append(f"✓ Good job describing the action!")
-    
-    # Location feedback
-    if location_matches == 0 and locations:
-        hints.append(f"Consider mentioning where this is taking place. (Hint: {locations[0]})")
-        feedback_parts.append(f"Missing location: {locations[0]}")
-    elif location_matches > 0:
-        feedback_parts.append(f"✓ Good job mentioning the location!")
-    
-    # Add overall context score explanation
-    if context_score < 100:
-        missing_elements = []
-        if object_matches == 0 and objects:
-            missing_elements.append("main subject")
-        if action_matches == 0 and actions:
-            missing_elements.append("action")
-        if location_matches == 0 and locations:
-            missing_elements.append("location")
-        
-        if missing_elements:
-            feedback_parts.append(f"Context score {context_score}%: You missed {', '.join(missing_elements)}")
-        else:
-            feedback_parts.append(f"Context score {context_score}%: Good description!")
-    else:
-        feedback_parts.append("Context score 100%: Excellent description!")
-    
-    # Context passes if object OR action is present
-    context_passed = (object_matches > 0) or (action_matches > 0)
-    
-    return context_score, hints, context_passed, feedback_parts
+    return context_score, hints, context_passed
 
 def score_and_tags(orig: str, corrected: str):
-    # Enhanced scoring that recognizes valid variations
+    """Score grammar corrections by comparing original vs corrected text"""
     tags = {"SVA":0,"Article":0,"Spelling":0,"Punctuation":0,"Tense":0,"WordChoice":0}
     penalties = 0
     
-    # Check if the "correction" is actually just a valid alternative
-    orig_lower = orig.lower().strip()
-    corrected_lower = corrected.lower().strip()
+    # Split into words for comparison
+    orig_words = orig.lower().split()
+    corrected_words = corrected.lower().split()
     
-    # If they're essentially the same (just word order differences), give full score
-    if are_equivalent_sentences(orig_lower, corrected_lower):
-        return 100, tags
+    # Check for spelling errors by comparing word-by-word
+    for i, (orig_word, corr_word) in enumerate(zip(orig_words, corrected_words)):
+        if orig_word != corr_word:
+            # Determine error type based on the difference
+            if len(orig_word) == len(corr_word):
+                # Same length, likely spelling error
+                tags["Spelling"] += 1
+                penalties += 10
+            elif orig_word in corr_word or corr_word in orig_word:
+                # One contains the other, likely missing/extra letters
+                tags["Spelling"] += 1
+                penalties += 8
+            else:
+                # Different words entirely, likely word choice
+                tags["WordChoice"] += 1
+                penalties += 12
     
-    # Standard penalties
-    if orig and orig[0].islower(): tags["Punctuation"] += 1; penalties += 5
-    if not orig.strip().endswith((".", "!", "?")): tags["Punctuation"] += 1; penalties += 5
+    # Check for extra/missing words
+    if len(orig_words) != len(corrected_words):
+        if len(corrected_words) > len(orig_words):
+            # Words were added
+            tags["WordChoice"] += 1
+            penalties += 8
+        else:
+            # Words were removed
+            tags["WordChoice"] += 1
+            penalties += 6
+    
+    # Check capitalization
+    if orig and orig[0].islower(): 
+        tags["Punctuation"] += 1
+        penalties += 5
+    
+    # Check ending punctuation
+    if not orig.strip().endswith((".", "!", "?")):
+        tags["Punctuation"] += 1
+        penalties += 5
+    
+    # Calculate final score
     score = max(0, 100 - penalties)
     return score, tags
 
-def are_equivalent_sentences(sent1: str, sent2: str) -> bool:
-    """Check if two sentences are equivalent (same words, possibly different order)"""
-    import re
-    
-    # Remove punctuation and split into words
-    words1 = set(re.findall(r'\b\w+\b', sent1.lower()))
-    words2 = set(re.findall(r'\b\w+\b', sent2.lower()))
-    
-    # If they have the same words, they're equivalent
-    if words1 == words2:
-        return True
-    
-    # Check for common adverb placement variations
-    # Remove adverbs and check if the rest is the same
-    adverbs = ['carefully', 'quickly', 'slowly', 'quietly', 'loudly', 'gently', 'easily', 'hardly', 'really', 'very', 'quite', 'rather', 'pretty', 'fairly', 'somewhat', 'extremely', 'completely', 'totally', 'absolutely', 'definitely', 'certainly', 'probably', 'possibly', 'maybe', 'perhaps', 'surely', 'obviously', 'clearly', 'naturally', 'normally', 'usually', 'often', 'sometimes', 'rarely', 'never', 'always', 'frequently', 'occasionally', 'regularly', 'constantly', 'continuously', 'immediately', 'instantly', 'suddenly', 'gradually', 'eventually', 'finally', 'ultimately', 'initially', 'originally', 'previously', 'recently', 'lately', 'currently', 'presently', 'meanwhile', 'simultaneously', 'concurrently', 'subsequently', 'consequently', 'therefore', 'thus', 'hence', 'accordingly', 'consequently', 'moreover', 'furthermore', 'additionally', 'besides', 'however', 'nevertheless', 'nonetheless', 'still', 'yet', 'though', 'although', 'despite', 'in spite of', 'regardless', 'irrespective', 'notwithstanding']
-    
-    # Remove adverbs from both sentences
-    words1_no_adv = words1 - set(adverbs)
-    words2_no_adv = words2 - set(adverbs)
-    
-    # If they're the same without adverbs, they're equivalent
-    if words1_no_adv == words2_no_adv:
-        return True
-    
-    return False
-
 def semantic_consistency_checks(text: str) -> Tuple[List[str], int]:
-    """Return warnings and a suggested penalty (0-30) for meaning issues.
-    Currently checks simple pronoun–gendered-noun mismatches.
-    """
-    t = (text or "").lower()
-    warnings: List[str] = []
-
-    def contains_any(words: List[str]) -> bool:
-        return any(re.search(rf"\b{re.escape(w)}\b", t) for w in words)
-
-    masc_pronouns = ["he", "him", "his"]
-    fem_pronouns = ["she", "her", "hers"]
-
-    male_nouns = [
-        "man","boy","father","brother","uncle","king","actor","waiter","policeman","businessman","gentleman","husband","son"
-    ]
-    female_nouns = [
-        "woman","girl","mother","sister","aunt","queen","actress","waitress","policewoman","businesswoman","lady","wife","daughter"
-    ]
-
+    """Check for basic semantic issues"""
+    warnings = []
     penalty = 0
-    if contains_any(fem_pronouns) and contains_any(male_nouns):
-        warnings.append("Pronoun–noun mismatch: feminine pronoun with a male noun (meaning issue).")
-        penalty += 20
-    if contains_any(masc_pronouns) and contains_any(female_nouns):
-        warnings.append("Pronoun–noun mismatch: masculine pronoun with a female noun (meaning issue).")
-        penalty += 20
-
-    # Cap penalty to avoid overpowering grammar score
-    penalty = min(penalty, 30)
+    
+    t = text.lower()
+    
+    # Check for pronoun-noun mismatches
+    if any(word in t for word in ["he", "him", "his"]) and any(word in t for word in ["woman", "girl", "lady"]):
+        warnings.append("Pronoun-noun mismatch detected")
+        penalty += 15
+    
+    if any(word in t for word in ["she", "her", "hers"]) and any(word in t for word in ["man", "boy", "gentleman"]):
+        warnings.append("Pronoun-noun mismatch detected")
+        penalty += 15
+    
     return warnings, penalty
 
 @router.post("/evaluate")
@@ -298,120 +297,129 @@ def evaluate(req: EvalRequest):
         f"Use {req.dialect} spelling. "
         "When mode='minimal', make the smallest edits that fix grammar/punctuation. "
         "Keep the student's voice. "
-        "IMPORTANT: For adverb placement, both positions are often correct (e.g., 'She carefully reads' and 'She reads carefully' are both valid). "
-        "Only correct if there's a clear grammatical error, not just different but valid word order."
+        "Only correct clear grammatical errors, not valid alternative word orders."
     )
     user = f"Original: {req.text}\nMode: {req.mode}\nGrade: {req.grade_level}\nReturn only the corrected sentence."
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role":"system", "content":system},
-                  {"role":"user", "content":user}],
-        temperature=0
-    )
-    corrected = resp.choices[0].message.content.strip()
     
-    # Calculate grammar score (initial, before any semantic rewrite)
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role":"system", "content":system},
+                      {"role":"user", "content":user}],
+            temperature=0
+        )
+        corrected = resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Grammar correction failed: {e}")
+        corrected = req.text  # Use original if correction fails
+    
+    # Calculate grammar score
     grammar_score, tags = score_and_tags(req.text, corrected)
-
-    # Stage A2: Semantic consistency (affects score regardless of image context)
+    
+    # Semantic consistency checks
     sem_warnings, sem_penalty = semantic_consistency_checks(corrected)
     if sem_warnings:
-        # augment tags and apply penalty later to final score
         try:
-            tags["Semantics"] = tags.get("Semantics", 0) + len(sem_warnings)  # type: ignore
+            tags["Semantics"] = tags.get("Semantics", 0) + len(sem_warnings)
         except Exception:
             pass
     
-    # Optional: rewrite gendered nouns to match pronouns
-    def _preserve_case(src: str, dst: str) -> str:
-        return dst.capitalize() if src[:1].isupper() else dst
-
-    MALE_TO_FEMALE = {
-        "man": "woman",
-        "boy": "girl",
-        "father": "mother",
-        "brother": "sister",
-        "uncle": "aunt",
-        "king": "queen",
-        "actor": "actress",
-        "waiter": "waitress",
-        "policeman": "policewoman",
-        "businessman": "businesswoman",
-        "gentleman": "lady",
-        "husband": "wife",
-        "son": "daughter",
-    }
-    FEMALE_TO_MALE = {v: k for k, v in MALE_TO_FEMALE.items()}
-
-    lower_txt = corrected.lower()
-    has_fem_pronoun = any(re.search(rf"\b{p}\b", lower_txt) for p in ["she", "her", "hers"])
-    has_masc_pronoun = any(re.search(rf"\b{p}\b", lower_txt) for p in ["he", "him", "his"])
-
-    rewrite_note = None
-    if has_fem_pronoun:
-        for male, female in MALE_TO_FEMALE.items():
-            if re.search(rf"\b{male}\b", lower_txt):
-                corrected = re.sub(rf"\b{male}\b", lambda m: _preserve_case(m.group(0), female), corrected, flags=re.IGNORECASE)
-                rewrite_note = f"Adjusted noun to match pronoun: {male} → {female}."
-                sem_penalty = 0
-                break
-    elif has_masc_pronoun:
-        for female, male in FEMALE_TO_MALE.items():
-            if re.search(rf"\b{female}\b", lower_txt):
-                corrected = re.sub(rf"\b{female}\b", lambda m: _preserve_case(m.group(0), male), corrected, flags=re.IGNORECASE)
-                rewrite_note = f"Adjusted noun to match pronoun: {female} → {male}."
-                sem_penalty = 0
-                break
-    
-    # Stage B: Context Validation (if image_id provided)
+    # Stage B: Context Validation
     context_score = 100
     context_hints = []
     context_passed = True
+    context_feedback = []
     final_score = grammar_score
     
-    if req.image_id:
-        # Get image metadata from the images list
-        from .images import IMAGES
-        image_metadata = None
-        for img in IMAGES:
-            if img["id"] == req.image_id:
-                image_metadata = img
-                break
+    if req.image_url:
+        # Use GPT-4o vision for direct image analysis
+        try:
+            context_score, context_hints, context_passed, context_feedback = validate_with_vision(
+                corrected, req.image_url, req.grade_level
+            )
+        except Exception as e:
+            context_score = 70
+            context_passed = False
+            context_feedback = [f"Vision analysis failed: {str(e)}"]
+            context_hints = ["Could not analyze image - please check your description manually"]
         
-        if image_metadata:
-            context_score, context_hints, context_passed, context_feedback = validate_context(corrected, image_metadata)
-            
-            # Adjust final score based on context
-            if context_passed:
-                # Weight: 70% grammar, 30% context
-                final_score = int(grammar_score * 0.7 + context_score * 0.3)
-            else:
-                # Context failed - cap the score
-                final_score = min(grammar_score, 80)  # Max 80 if context fails
+        # Calculate final score with new weighting: 40% grammar, 60% context
+        final_score = int(grammar_score * 0.4 + context_score * 0.6)
     
-    # Apply semantic penalty after combining with context
+    elif req.image_id:
+        # Fallback to metadata-based validation
+        try:
+            from .images import IMAGES
+            image_metadata = None
+            for img in IMAGES:
+                if img["id"] == req.image_id:
+                    image_metadata = img
+                    break
+            
+            if image_metadata:
+                context_score, context_hints, context_passed = validate_context(corrected, image_metadata)
+                context_feedback = [f"Metadata-based validation: {context_score}%"]
+                
+                # Calculate final score with new weighting: 40% grammar, 60% context
+                final_score = int(grammar_score * 0.4 + context_score * 0.6)
+        except Exception as e:
+            print(f"Metadata validation failed: {e}")
+    
+    # Apply semantic penalty
     if sem_penalty:
         final_score = max(0, final_score - sem_penalty)
-
-    # Generate diff AFTER potential rewrite
-    diff_list = list(ndiff(req.text.split(), corrected.split()))
-    diff = [{"op":"replace" if x.startswith(('-','+')) else "equal","token":x[2:]} for x in diff_list]
-
-    explanations = context_hints + sem_warnings  # Include semantic notes
-    if rewrite_note:
-        explanations.append(rewrite_note)
     
-    # Combine context feedback with explanations
+    # Create combined corrected version that includes context fixes
+    combined_corrected = corrected
+    if req.image_url and context_feedback:
+        # Try to create a more complete corrected version based on context feedback
+        try:
+            # Use AI to create a combined correction that includes context fixes
+            context_prompt = f"""
+            Original sentence: "{req.text}"
+            Grammar-corrected sentence: "{corrected}"
+            Context feedback: {context_feedback}
+            
+            Create a final corrected sentence that combines both grammar corrections AND context corrections.
+            For example, if the original says "boy" but it should be "girl", change it to "girl".
+            If it says "using pens" but should be "using a paintbrush", change it to "using a paintbrush".
+            Keep the grammar corrections but also apply the context corrections.
+            
+            Return ONLY the final corrected sentence, nothing else.
+            """
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": context_prompt}],
+                max_tokens=100,
+                temperature=0.1
+            )
+            
+            combined_corrected = response.choices[0].message.content.strip().strip('"')
+            
+        except Exception as e:
+            # Fallback to grammar-corrected version if context correction fails
+            combined_corrected = corrected
+
+    # Generate diff using the combined corrected version
+    try:
+        diff_list = list(ndiff(req.text.split(), combined_corrected.split()))
+        diff = [{"op":"replace" if x.startswith(('-','+')) else "equal","token":x[2:]} for x in diff_list]
+    except:
+        diff = []
+    
+    explanations = context_hints + sem_warnings
     all_feedback = explanations + context_feedback
     
     return {
-        "corrected": corrected, 
+        "corrected": combined_corrected,  # Use combined corrected version
+        "grammar_corrected": corrected,   # Keep original grammar correction for reference
         "diff": diff, 
         "explanations": all_feedback,
-        "context_feedback": context_feedback,  # Separate detailed context feedback
+        "context_feedback": context_feedback,
         "score": final_score, 
         "tags": tags, 
-        "confidence": "medium",
+        "confidence": "high" if req.image_url else "medium",
         "context_score": context_score,
         "context_passed": context_passed,
         "grammar_score": grammar_score

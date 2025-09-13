@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, RotateCcw, Star } from 'lucide-react';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useToast } from '@/hooks/use-toast';
+import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 
 interface ClozeTestProps {
   text: string;
@@ -19,8 +20,10 @@ const ClozeTestComponent = ({ text, answers, onComplete, onRestart }: ClozeTestP
   const [userAnswers, setUserAnswers] = useState<string[]>(new Array(answers.length).fill(''));
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [startTime, setStartTime] = useState<number>(Date.now());
   const { playSound } = useSoundEffects();
   const { toast } = useToast();
+  const { updateProgress, addSession } = useSupabaseProgress();
 
   // Split the text by blanks (______) to create segments
   const textSegments = text.split('______');
@@ -35,7 +38,7 @@ const ClozeTestComponent = ({ text, answers, onComplete, onRestart }: ClozeTestP
     return userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     let correctCount = 0;
     userAnswers.forEach((answer, index) => {
       if (checkAnswer(answer, answers[index])) {
@@ -45,6 +48,37 @@ const ClozeTestComponent = ({ text, answers, onComplete, onRestart }: ClozeTestP
 
     setScore(correctCount);
     setSubmitted(true);
+
+    // Calculate time spent and update progress
+    const timeSpentInSeconds = Math.floor((Date.now() - startTime) / 1000);
+    const isCorrect = correctCount >= answers.length * 0.7; // 70% threshold for "correct"
+
+    try {
+      await updateProgress("cloze", {
+        total_attempts: 1,
+        correct_answers: isCorrect ? 1 : 0,
+        total_time_spent: Math.max(1, timeSpentInSeconds),
+        best_streak: isCorrect ? 1 : 0
+      });
+
+      await addSession({
+        user_id: '', // Will be filled by the hook
+        activity_type: 'cloze',
+        score: isCorrect ? 1 : 0,
+        total_questions: answers.length,
+        time_spent: Math.max(30, timeSpentInSeconds),
+        difficulty_level: 1,
+        session_data: {
+          cloze_test_data: {
+            correct_count: correctCount,
+            total_questions: answers.length,
+            correct: isCorrect
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Error updating cloze test progress:", error);
+    }
 
     if (correctCount === answers.length) {
       playSound('success');
@@ -73,6 +107,7 @@ const ClozeTestComponent = ({ text, answers, onComplete, onRestart }: ClozeTestP
     setUserAnswers(new Array(answers.length).fill(''));
     setSubmitted(false);
     setScore(0);
+    setStartTime(Date.now()); // Reset timer for new attempt
     onRestart();
   };
 
