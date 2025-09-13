@@ -1,6 +1,55 @@
 
 import { useState, useCallback, useRef } from 'react';
 
+// Function to add punctuation to speech input
+const addPunctuation = (text: string): string => {
+  if (!text.trim()) return text;
+  
+  let result = text.trim();
+  
+  // Add comma before common conjunctions
+  const conjunctions = [' and ', ' but ', ' or ', ' so ', ' yet ', ' for ', ' nor '];
+  conjunctions.forEach(conjunction => {
+    const regex = new RegExp(conjunction, 'gi');
+    result = result.replace(regex, `,${conjunction}`);
+  });
+  
+  // Add comma after introductory words/phrases
+  const introWords = ['well ', 'oh ', 'yes ', 'no ', 'okay ', 'sure ', 'actually ', 'however ', 'therefore ', 'meanwhile ', 'first ', 'second ', 'finally '];
+  introWords.forEach(word => {
+    const regex = new RegExp(`^${word}`, 'i');
+    if (regex.test(result)) {
+      result = result.replace(regex, `${word.charAt(0).toUpperCase() + word.slice(1)}, `);
+    }
+  });
+  
+  // Add comma before relative clauses (who, which, that)
+  result = result.replace(/\s+(who|which|that)\s+/gi, ', $1 ');
+  
+  // Add comma in lists (before "and" in lists of 3+ items)
+  result = result.replace(/(\w+)\s+and\s+(\w+)\s+and\s+/gi, '$1, $2, and ');
+  
+  // Add comma after time expressions
+  result = result.replace(/(\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))\s+/gi, '$1, ');
+  
+  // Add comma after addresses and locations
+  result = result.replace(/(\d+\s+\w+\s+street|\d+\s+\w+\s+avenue|\d+\s+\w+\s+road)\s+/gi, '$1, ');
+  
+  // Add period at the end if no punctuation exists
+  if (!/[.!?]$/.test(result)) {
+    result += '.';
+  }
+  
+  // Clean up multiple commas
+  result = result.replace(/,\s*,/g, ',');
+  
+  // Clean up spaces around punctuation
+  result = result.replace(/\s+([,.!?])/g, '$1');
+  result = result.replace(/([,.!?])\s*([,.!?])/g, '$1$2');
+  
+  return result;
+};
+
 // Define the SpeechRecognition interface for TypeScript
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
@@ -82,7 +131,13 @@ export const useVoiceRecognition = ({
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript.trim();
-      onResult(transcript);
+      // Capitalize the first letter of the first word
+      let capitalizedTranscript = transcript.charAt(0).toUpperCase() + transcript.slice(1);
+      
+      // Add commas and periods for better grammar
+      capitalizedTranscript = addPunctuation(capitalizedTranscript);
+      
+      onResult(capitalizedTranscript);
       setIsListening(false);
     };
 

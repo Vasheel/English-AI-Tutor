@@ -107,7 +107,7 @@ const App = () => (
 <Route path="/chat" element={
   <ProtectedRoute>
     <ChatBot 
-      systemPrompt="You are an English learning assistant for students in Mauritius. Provide direct, concise answers without excessive examples."
+      systemPrompt="You are an English learning assistant for level 6 (PSAC) students in Mauritius. Provide direct, concise answers without excessive examples. Keep all responses to around 20-25 words maximum unless the user specifically requests more detail or asks for a specific word count."
       model={(import.meta.env.VITE_CHAT_MODEL as string) || "gpt-5"}
     />
   </ProtectedRoute>

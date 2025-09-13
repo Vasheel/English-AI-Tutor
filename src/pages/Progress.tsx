@@ -5,6 +5,7 @@ import StudentProgressCard from "@/components/StudentProgressCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
+import SpeakButton from "@/components/SpeakButton";
 
 // Sample data structures
 const progressData = [
@@ -93,6 +94,9 @@ const Progress = () => {
   return (
     <div className="min-h-screen bg-background">
       <NavBar />
+      
+      {/* Top Left Speak Button */}
+      <SpeakButton />
       <div className="container mx-auto py-8 px-4">
         <h1 className="text-3xl font-bold mb-2">Your Learning Progress</h1>
         <p className="text-gray-600 mb-8">

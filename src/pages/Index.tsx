@@ -1,11 +1,10 @@
 import NavBar from "@/components/NavBar";
 import SubjectCard from "@/components/SubjectCard";
-import GrammarCorrector from "@/components/GrammarCorrector";
 import SupabaseProgressDashboard from "@/components/SupabaseProgressDashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
 import { useNavigate, useLocation } from 'react-router-dom';
+import SpeakButton from "@/components/SpeakButton";
 
 const Index = () => {
   const { progress } = useSupabaseProgress();
@@ -20,31 +19,24 @@ const Index = () => {
 
   const subjects = [
     {
-      title: "English Tutor AI",
-      icon: "🤖",
-      color: "bg-edu-red",
-      progress: 100,
-      route: "/"
-    },
-    {
       title: "English Grammar",
       icon: "✍️",
       color: "bg-edu-blue",
-      progress: getProgressForActivity('grammar'),
+      progress: 35,
       route: "/grammar"
     },
     {
       title: "Educational Games",
       icon: "🎮",
       color: "bg-edu-purple",
-      progress: Math.max(getProgressForActivity('word_scramble'), getProgressForActivity('sentence_builder')),
+      progress: 40,
       route: "/games"
     },
     {
       title: "Reading Comprehension",
       icon: "📚",
       color: "bg-edu-orange",
-      progress: getProgressForActivity('reading_comprehension'),
+      progress: 30,
       route: "/reading"
     },
     {
@@ -55,24 +47,55 @@ const Index = () => {
       route: "/progress"
     },
     {
-      title: "Practice Quizzes",
+      title: "Grammar Exercises",
       icon: "📝",
-      color: "bg-edu-yellow",
-      progress: getProgressForActivity('quiz'),
-      route: "/quizzes"
+      color: "bg-edu-cyan",
+      progress: 25,
+      route: "/exercise-generator"
     },
     {
-      title: "English Tutor AI",
-      icon: "🤖",
-      color: "bg-edu-pink",
+      title: "Close Test",
+      icon: "✏️",
+      color: "bg-edu-indigo",
+      progress: 45,
+      route: "/cloze"
+    },
+    {
+      title: "Smart Quiz",
+      icon: "🎯",
+      color: "bg-edu-violet",
+      progress: 30,
+      route: "/adaptive-quiz"
+    },
+    {
+      title: "Image Quiz",
+      icon: "🎨",
+      color: "bg-edu-rose",
+      progress: 40,
+      route: "/image-quiz"
+    },
+    {
+      title: "PSAC Chat",
+      icon: "💬",
+      color: "bg-edu-teal",
       progress: 100,
       route: "/chat"
+    },
+    {
+      title: "Topic Questions",
+      icon: "🤖",
+      color: "bg-edu-amber",
+      progress: 35,
+      route: "/ai-demo"
     }
   ];
 
   return (
     <div className="min-h-screen bg-edu-bg">
       <NavBar />
+      
+      {/* Top Left Speak Button */}
+      <SpeakButton />
       
       <div className="container mx-auto py-8 px-4">
         <div className="text-center mb-12">
@@ -84,7 +107,7 @@ const Index = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
           {subjects.map((subject, index) => (
             <SubjectCard
               key={index}
@@ -97,26 +120,15 @@ const Index = () => {
           ))}
         </div>
 
-        <Tabs defaultValue="grammar" className="mb-12">
-          <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8">
-            <TabsTrigger value="grammar">AI Grammar Helper</TabsTrigger>
-            <TabsTrigger value="progress">Your Progress</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="grammar">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold mb-4">AI Grammar Helper</h2>
-              <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-                Practice writing and get instant, friendly feedback on your grammar. Perfect for improving your English skills!
-              </p>
-            </div>
-            <GrammarCorrector />
-          </TabsContent>
-          
-          <TabsContent value="progress">
-            <SupabaseProgressDashboard />
-          </TabsContent>
-        </Tabs>
+        <div className="mb-12">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold mb-4">Your Progress</h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              Track your learning journey and see how you're improving across different activities!
+            </p>
+          </div>
+          <SupabaseProgressDashboard />
+        </div>
 
         <Card className="bg-gradient-to-r from-edu-purple to-edu-light-purple text-white">
           <CardHeader className="text-center">

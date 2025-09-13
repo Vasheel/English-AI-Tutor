@@ -5,12 +5,16 @@ import SentenceBuilder from "@/components/games/SentenceBuilderWithWhisper";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Gamepad2, Puzzle, Building, Trophy } from "lucide-react";
+import SpeakButton from "@/components/SpeakButton";
  
 
 const Games = () => {
   return (
     <div className="min-h-screen bg-edu-bg">
       <NavBar />
+      
+      {/* Top Left Speak Button */}
+      <SpeakButton />
       <div className="container mx-auto py-8 px-4">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2 flex items-center justify-center gap-2">

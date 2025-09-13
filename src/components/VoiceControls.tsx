@@ -5,6 +5,55 @@ import fuzzysort from 'fuzzysort';
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 
+// Function to add punctuation to speech input
+const addPunctuation = (text: string): string => {
+  if (!text.trim()) return text;
+  
+  let result = text.trim();
+  
+  // Add comma before common conjunctions
+  const conjunctions = [' and ', ' but ', ' or ', ' so ', ' yet ', ' for ', ' nor '];
+  conjunctions.forEach(conjunction => {
+    const regex = new RegExp(conjunction, 'gi');
+    result = result.replace(regex, `,${conjunction}`);
+  });
+  
+  // Add comma after introductory words/phrases
+  const introWords = ['well ', 'oh ', 'yes ', 'no ', 'okay ', 'sure ', 'actually ', 'however ', 'therefore ', 'meanwhile ', 'first ', 'second ', 'finally '];
+  introWords.forEach(word => {
+    const regex = new RegExp(`^${word}`, 'i');
+    if (regex.test(result)) {
+      result = result.replace(regex, `${word.charAt(0).toUpperCase() + word.slice(1)}, `);
+    }
+  });
+  
+  // Add comma before relative clauses (who, which, that)
+  result = result.replace(/\s+(who|which|that)\s+/gi, ', $1 ');
+  
+  // Add comma in lists (before "and" in lists of 3+ items)
+  result = result.replace(/(\w+)\s+and\s+(\w+)\s+and\s+/gi, '$1, $2, and ');
+  
+  // Add comma after time expressions
+  result = result.replace(/(\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))\s+/gi, '$1, ');
+  
+  // Add comma after addresses and locations
+  result = result.replace(/(\d+\s+\w+\s+street|\d+\s+\w+\s+avenue|\d+\s+\w+\s+road)\s+/gi, '$1, ');
+  
+  // Add period at the end if no punctuation exists
+  if (!/[.!?]$/.test(result)) {
+    result += '.';
+  }
+  
+  // Clean up multiple commas
+  result = result.replace(/,\s*,/g, ',');
+  
+  // Clean up spaces around punctuation
+  result = result.replace(/\s+([,.!?])/g, '$1');
+  result = result.replace(/([,.!?])\s*([,.!?])/g, '$1$2');
+  
+  return result;
+};
+
 // Define command patterns with fuzzy matching support
 const commands = [
   { intent: "greet", keywords: ["hello", "hi", "hey", "good morning", "good afternoon"] },
@@ -14,7 +63,12 @@ const commands = [
   { intent: "exercises", keywords: ["exercises", "practice", "practice exercises"] },
   { intent: "grammar", keywords: ["grammar", "grammar rules", "go to grammar"] },
   { intent: "quizzes", keywords: ["quizzes", "test", "take quiz"] },
-  { intent: "progress", keywords: ["progress", "my progress", "check progress"] }
+  { intent: "progress", keywords: ["progress", "my progress", "check progress"] },
+  { intent: "cloze", keywords: ["close test", "cloze test", "cloze", "close"] },
+  { intent: "chat", keywords: ["psac chat", "chat", "ai chat", "tutor chat", "psac"] },
+  { intent: "image-quiz", keywords: ["image quiz", "picture quiz", "image", "picture"] },
+  { intent: "smart-quiz", keywords: ["smart quiz", "adaptive quiz", "smart", "adaptive"] },
+  { intent: "topic-questions", keywords: ["topic questions", "ai demo", "topic", "questions"] }
 ];
 
 // Get best matching command using fuzzy search
@@ -68,6 +122,16 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
   const [error, setError] = useState<string | null>(null);
   const [suggestedCommands, setSuggestedCommands] = useState<string[]>([]);
   const [recentCommands, setRecentCommands] = useState<string[]>([]);
+
+  // Initialize suggested commands
+  useEffect(() => {
+    const defaultCommands = [
+      "hello", "what time", "games", "reading", 
+      "exercises", "grammar", "quizzes", "progress",
+      "close test", "psac chat", "image quiz", "smart quiz", "topic questions"
+    ];
+    setSuggestedCommands(defaultCommands);
+  }, []);
   const recognitionRef = useRef<SpeechRecognition|null>(null);
 
   const synth = window.speechSynthesis;
@@ -146,6 +210,26 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
           speak('Opening your progress section for you!');
           navigate('/progress');
           break;
+        case 'cloze':
+          speak('Opening the close test section for you!');
+          navigate('/cloze');
+          break;
+        case 'chat':
+          speak('Opening the PSAC chat for you!');
+          navigate('/chat');
+          break;
+        case 'image-quiz':
+          speak('Opening the image quiz for you!');
+          navigate('/image-quiz');
+          break;
+        case 'smart-quiz':
+          speak('Opening the smart quiz for you!');
+          navigate('/adaptive-quiz');
+          break;
+        case 'topic-questions':
+          speak('Opening the topic questions for you!');
+          navigate('/ai-demo');
+          break;
         default:
           setError("I didn't understand that. Please try again.");
           speak("I didn't understand that. Please try again.");
@@ -197,10 +281,14 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({ onSpeechInput, isGrammarS
         // Clear transcript before processing
         setTranscript('');
         
+        // Capitalize the first letter of the first word and add punctuation
+        let capitalizedTranscript = currentTranscript.charAt(0).toUpperCase() + currentTranscript.slice(1);
+        capitalizedTranscript = addPunctuation(capitalizedTranscript);
+        
         if (isGrammarSection) {
-          onSpeechInput(currentTranscript);
+          onSpeechInput(capitalizedTranscript);
         } else {
-          handleSpeechInput(currentTranscript);
+          handleSpeechInput(capitalizedTranscript);
         }
       } else {
         // Update interim transcript
@@ -274,25 +362,40 @@ return (
     <div className="fixed bottom-4 right-4 flex flex-col items-end space-y-2 z-50">
       {/* Transcript / Error / Suggestions Card */}
       <div className="w-64 bg-white rounded-lg shadow-lg overflow-hidden">
+        <div className="bg-gray-50 px-3 py-2 border-b">
+          <h3 className="text-xs font-medium text-gray-600">Voice Commands</h3>
+        </div>
         <CardContent className="p-3">
-          <p className="text-sm text-gray-700 mb-2">
-            {transcript || "Listening for your command..."}
-          </p>
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`w-2 h-2 rounded-full ${controlledListening ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
+            <p className="text-sm text-gray-700">
+              {controlledListening ? "Listening..." : "Ready to listen"}
+            </p>
+          </div>
+          {transcript && (
+            <p className="text-sm text-blue-600 mb-2 bg-blue-50 p-2 rounded">
+              "{transcript}"
+            </p>
+          )}
           {error && (
             <p className="text-xs text-red-600 mb-2 bg-red-50 p-2 rounded">
               {error}
             </p>
           )}
-          <div className="flex flex-wrap gap-1">
-            {suggestedCommands.map(cmd => (
-              <button
-                key={cmd}
-                className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
-                onClick={() => handleSpeechInput(cmd)}
-              >
-                {cmd}
-              </button>
-            ))}
+          <div className="mb-2">
+            <p className="text-xs text-gray-500 mb-1">Try saying:</p>
+            <div className="flex flex-wrap gap-1">
+              {suggestedCommands.map(cmd => (
+                <button
+                  key={cmd}
+                  className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200 transition-colors duration-200"
+                  onClick={() => handleSuggestedCommandClick(cmd)}
+                  title={`Click to say: ${cmd}`}
+                >
+                  {cmd}
+                </button>
+              ))}
+            </div>
           </div>
         </CardContent>
       </div>

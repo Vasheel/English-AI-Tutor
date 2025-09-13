@@ -1,5 +1,6 @@
 import ReadingModule from "@/components/ReadingModule";
 import NavBar from "@/components/NavBar";
+import SpeakButton from "@/components/SpeakButton";
 
 const ReadingPage = () => {
   const handleProgressUpdate = (points: number) => {
@@ -10,6 +11,9 @@ const ReadingPage = () => {
   return (
     <div className="min-h-screen bg-edu-bg">
       <NavBar />
+      
+      {/* Top Left Speak Button */}
+      <SpeakButton />
       <div className="container mx-auto py-8 px-4">
         <h1 className="text-3xl font-bold mb-6 text-edu-dark">📚 Reading Adventures</h1>
         <ReadingModule level={1} onProgress={handleProgressUpdate} />

@@ -2,6 +2,7 @@
 import NavBar from "@/components/NavBar";
 import GrammarCorrector from "@/components/GrammarCorrector";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import SpeakButton from "@/components/SpeakButton";
 
 const Grammar = () => {
   const tips = [
@@ -15,6 +16,9 @@ const Grammar = () => {
   return (
     <div className="min-h-screen bg-edu-bg">
       <NavBar />
+      
+      {/* Top Left Speak Button */}
+      <SpeakButton />
       <div className="container mx-auto py-8 px-4">
         <h1 className="text-3xl font-bold mb-2">English Grammar Helper</h1>
         <p className="text-gray-600 mb-8">

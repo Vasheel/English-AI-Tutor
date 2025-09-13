@@ -3,9 +3,10 @@ import { chat as chatApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import VoiceControls from './VoiceControls';
 import { Button } from "./ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageSquare, Plus, Settings, Trash2, Edit2 } from "lucide-react";
+import VoiceControls from './VoiceControls';
+import { useChatSessions } from '@/hooks/useChatSessions';
 
 interface ChatMessage {
   text: string;
@@ -19,151 +20,134 @@ interface ChatBotProps {
   model?: string;
 }
 
-// Question Interceptor for Political/Current Affairs Questions
+// Question Interceptor (same as before)
 const politicalQuestionInterceptor = (userMessage: string): string | null => {
   const lowerMsg = userMessage.toLowerCase();
   
-  // Prime Minister questions
   if ((lowerMsg.includes('prime minister') || lowerMsg.includes('pm')) && lowerMsg.includes('mauritius')) {
-    return `The current Prime Minister of Mauritius is **Dr Navinchandra Ramgoolam**. He won the election in November 2024, becoming Prime Minister for the fourth time in his career.`;
+    return `The current Prime Minister of Mauritius is Dr Navinchandra Ramgoolam since November 2024.`;
   }
   
-  // President questions
   if ((lowerMsg.includes('president') || lowerMsg.includes('head of state')) && lowerMsg.includes('mauritius')) {
-    return `Mauritius has a President as Head of State, but the Prime Minister (Dr Navinchandra Ramgoolam) is the Head of Government who runs the country.
-
-**PSAC Learning:** This is a good example of the difference between:
-- **Head of State** = President (ceremonial role)
-- **Head of Government** = Prime Minister (runs the government)
-
-**Writing Practice:** "Mauritius has both a President and a Prime Minister. The Prime Minister has more power in running the country."
-
-For current President information, check recent official sources as this information can change.`;
+    return `Mauritius has a President as Head of State, but Prime Minister Dr Ramgoolam runs the government.`;
   }
   
-  // Government/Leader questions
   if ((lowerMsg.includes('leader') || lowerMsg.includes('government') || lowerMsg.includes('minister')) && lowerMsg.includes('mauritius') && (lowerMsg.includes('who') || lowerMsg.includes('current'))) {
-    return `The government of Mauritius is led by Prime Minister **Dr Navinchandra Ramgoolam** (since November 2024).
-
-**PSAC Grammar Focus - Question Words:**
-- **Who** = asking about people ("Who is the Prime Minister?")
-- **What** = asking about things ("What is the capital?")
-- **When** = asking about time ("When was he elected?")
-- **Where** = asking about places ("Where is the government located?")
-
-**Example sentences:**
-- "Who leads Mauritius?" → "Dr Ramgoolam leads Mauritius."
-- "When did he become PM?" → "He became PM in November 2024."
-
-Always verify current political information with recent news sources!`;
+    return `The government of Mauritius is led by Prime Minister Dr Navinchandra Ramgoolam since November 2024.`;
   }
   
-  // Election questions
   if (lowerMsg.includes('election') && lowerMsg.includes('mauritius') && (lowerMsg.includes('2024') || lowerMsg.includes('recent') || lowerMsg.includes('latest'))) {
-    return `The most recent Mauritius general election was held in **November 2024**. Dr Navinchandra Ramgoolam's alliance won, and he became Prime Minister for the fourth time.
-
-**PSAC Writing Skills - Describing Events:**
-- Past tense for completed events: "The election was held in November."
-- Present perfect for recent events: "Dr Ramgoolam has become Prime Minister."
-- Sequence words: "First, the election took place. Then, the results were announced. Finally, the new PM was sworn in."
-
-**Vocabulary building:**
-- Election = when people vote for leaders
-- Alliance = groups working together
-- Term = period of time in office
-
-Remember to check current news for the most up-to-date election information!`;
+    return `The November 2024 Mauritius election was won by Dr Navinchandra Ramgoolam's alliance.`;
   }
   
-  return null; // No interception needed
+  return null;
 };
 
-// Standard system prompt for non-intercepted questions
-const STANDARD_SYSTEM_PROMPT = "You are an English learning assistant for students in Mauritius. Provide direct, concise answers without excessive examples.";
+const STANDARD_SYSTEM_PROMPT = "You are an English learning assistant for level 6 (PSAC) students in Mauritius. Provide direct, concise answers without excessive examples. Keep all responses to around 20-25 words maximum unless the user specifically requests more detail or asks for a specific word count. When counting words, be extremely accurate - count every word including articles, prepositions, and conjunctions. When asked for word counts, provide the exact number and double-check your count.";
 
 const ChatBot: React.FC<ChatBotProps> = ({ 
   systemPrompt = STANDARD_SYSTEM_PROMPT, 
   model = (import.meta.env.VITE_CHAT_MODEL as string) || "gpt-5" 
 }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [context, setContext] = useState<string[]>([]);
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [editingTitle, setEditingTitle] = useState<string | null>(null);
+
+  const {
+    sessions,
+    currentSession,
+    messages: dbMessages,
+    loading,
+    createSession,
+    switchSession,
+    saveMessage,
+    updateSessionTitle,
+    deleteSession,
+    generateSessionTitle
+  } = useChatSessions();
+
+  // Convert database messages to display format
+  const messages: ChatMessage[] = dbMessages.map(msg => ({
+    text: msg.content,
+    type: msg.message_type as 'user' | 'bot',
+    timestamp: new Date(msg.timestamp).toLocaleTimeString()
+  }));
+
+  // Initialize with first session or create new one
+  useEffect(() => {
+    if (!loading && !currentSession && sessions.length === 0) {
+      createSession('New Chat');
+    } else if (!loading && !currentSession && sessions.length > 0) {
+      switchSession(sessions[0]);
+    }
+  }, [loading, currentSession, sessions, createSession, switchSession]);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || !currentSession) return;
 
-    // Add user message
-    const userMessage: ChatMessage = {
-      text,
-      type: 'user',
-      timestamp: new Date().toLocaleTimeString()
-    };
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
+    // Save user message to database
+    await saveMessage('user', text);
 
-    // CHECK FOR POLITICAL QUESTIONS FIRST - INTERCEPT BEFORE LLM
+    // Check for political questions first
     const interceptedResponse = politicalQuestionInterceptor(text);
     if (interceptedResponse) {
-      // Provide immediate, accurate response without consulting LLM
-      setMessages(prev => [...prev, {
-        text: interceptedResponse,
-        type: 'bot',
-        timestamp: new Date().toLocaleTimeString()
-      }]);
-      return; // Exit early, don't call the LLM
+      await saveMessage('bot', interceptedResponse);
+      setInput('');
+      return;
     }
 
-    // For non-political questions, proceed with normal LLM chat
-    setContext(prev => [...prev, text]);
+    // For non-political questions, call LLM
     setIsLoading(true);
     setError(null);
 
     try {
-      // Prepare messages for backend chat
       const messagesForAPI = [
         { role: 'system', content: systemPrompt },
-        ...context.map(msg => ({ role: 'user', content: msg })),
         { role: 'user', content: text }
       ];
 
-      // Make API call to backend (proxy to OpenAI)
       const data = await chatApi(messagesForAPI, { model, temperature: 0.7, max_tokens: 256 });
       const botResponse = data.reply.trim();
 
-      // Add bot message
-      setMessages(prev => [...prev, {
-        text: botResponse,
-        type: 'bot',
-        timestamp: new Date().toLocaleTimeString()
-      }]);
+      // Save bot response to database
+      await saveMessage('bot', botResponse);
+
+      // Auto-generate session title from first user message
+      if (messages.length === 0) {
+        const title = generateSessionTitle(text);
+        await updateSessionTitle(currentSession.id, title);
+      }
 
     } catch (err) {
-      setError('Sorry, I encountered an error. Please try again.');
+      const errorMessage = 'Sorry, I encountered an error. Please try again.';
+      setError(errorMessage);
       console.error('Chat error:', err);
-      
-      // Add error message
-      setMessages(prev => [...prev, {
-        text: 'Sorry, I encountered an error. Please try again.',
-        type: 'bot',
-        timestamp: new Date().toLocaleTimeString(),
-        error: 'error'
-      }]);
+      await saveMessage('bot', errorMessage, { error: true });
     } finally {
       setIsLoading(false);
     }
-  }, [systemPrompt, model, context]);
 
-  // Handle speech input from VoiceControls
+    setInput('');
+  }, [systemPrompt, model, currentSession, saveMessage, messages.length, generateSessionTitle, updateSessionTitle]);
+
   const handleSpeechInput = useCallback((text: string) => {
     sendMessage(text);
   }, [sendMessage]);
 
-  // Handle text input submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     sendMessage(input);
+  };
+
+  const handleNewChat = async () => {
+    await createSession('New Chat');
+  };
+
+  const handleEditTitle = async (sessionId: string, newTitle: string) => {
+    await updateSessionTitle(sessionId, newTitle);
+    setEditingTitle(null);
   };
 
   // Scroll to bottom when new messages arrive
@@ -174,85 +158,188 @@ const ChatBot: React.FC<ChatBotProps> = ({
     }
   }, [messages]);
 
-  // Clear context if too many messages
-  useEffect(() => {
-    if (context.length > 5) {
-      setContext(prev => prev.slice(1));
-    }
-  }, [context]);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full max-w-3xl mx-auto p-4">
-      <Card className="shadow-md">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xl">PSAC English Chat Tutor</CardTitle>
-            <Badge variant="outline">PSAC Mode • Current Facts ✓</Badge>
+    <div className="flex h-screen max-h-[800px]">
+      {/* Sidebar */}
+      {showSidebar && (
+        <div className="w-80 bg-gray-50 border-r flex flex-col">
+          <div className="p-4 border-b">
+            <Button onClick={handleNewChat} className="w-full" size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              New Chat
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-      <div className="h-[520px] border rounded-lg overflow-y-auto p-4 bg-gray-50" id="chat-container">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`mb-4 ${
-              message.type === 'user' ? 'text-right' : 'text-left'
-            }`}
-          >
-            <div
-              className={`inline-block p-4 rounded-xl max-w-[85%] ${
-                message.type === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : message.error ? 'bg-red-500 text-white' : 'bg-gray-100'
-              }`}
-            >
-              <div className="whitespace-pre-wrap mb-1">{message.text}</div>
-              <small className="block text-gray-500 text-xs">
-                {message.timestamp}
-              </small>
+          
+          <div className="flex-1 overflow-y-auto p-2">
+            {sessions.map((session) => (
+              <div
+                key={session.id}
+                className={`group flex items-center justify-between p-3 mb-2 rounded-lg cursor-pointer transition-colors ${
+                  currentSession?.id === session.id
+                    ? 'bg-blue-100 border border-blue-200'
+                    : 'bg-white hover:bg-gray-100'
+                }`}
+                onClick={() => switchSession(session)}
+              >
+                <div className="flex-1 min-w-0">
+                  {editingTitle === session.id ? (
+                    <input
+                      type="text"
+                      defaultValue={session.title}
+                      className="w-full text-sm bg-transparent border-none outline-none"
+                      onBlur={(e) => handleEditTitle(session.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleEditTitle(session.id, e.currentTarget.value);
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingTitle(null);
+                        }
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium truncate">{session.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(session.updated_at).toLocaleDateString()}
+                      </p>
+                    </>
+                  )}
+                </div>
+                
+                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingTitle(session.id);
+                    }}
+                  >
+                    <Edit2 className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm('Delete this chat session?')) {
+                        deleteSession(session.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        <Card className="flex-1 rounded-none border-0">
+          <CardHeader className="border-b">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSidebar(!showSidebar)}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+                <div>
+                  <CardTitle className="text-xl">
+                    {currentSession?.title || 'PSAC English Chat Tutor'}
+                  </CardTitle>
+                  <Badge variant="outline">PSAC Mode • Current Facts ✓</Badge>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="text-center mt-4">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto" />
-            <p className="text-gray-500 mt-2">Thinking...</p>
-          </div>
-        )}
-        {error && (
-          <div className="text-red-500 text-sm mb-4">
-            {error}
-          </div>
-        )}
-      </div>
+          </CardHeader>
+          
+          <CardContent className="flex-1 flex flex-col p-0">
+            <div 
+              className="flex-1 overflow-y-auto p-4 bg-gray-50" 
+              id="chat-container"
+            >
+              {messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`mb-4 ${
+                    message.type === 'user' ? 'text-right' : 'text-left'
+                  }`}
+                >
+                  <div
+                    className={`inline-block p-4 rounded-xl max-w-[85%] ${
+                      message.type === 'user'
+                        ? 'bg-blue-500 text-white'
+                        : message.error ? 'bg-red-500 text-white' : 'bg-gray-100'
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap mb-1">{message.text}</div>
+                    <small className="block text-gray-500 text-xs">
+                      {message.timestamp}
+                    </small>
+                  </div>
+                </div>
+              ))}
+              
+              {isLoading && (
+                <div className="text-center mt-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto" />
+                  <p className="text-gray-500 mt-2">Thinking...</p>
+                </div>
+              )}
+              
+              {error && (
+                <div className="text-red-500 text-sm mb-4">
+                  {error}
+                </div>
+              )}
+            </div>
 
-      <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
-        <Input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a PSAC-style question (grammar, vocabulary, comprehension, writing)..."
-          disabled={isLoading}
-        />
-        <Button 
-          type="submit" 
-          disabled={isLoading}
-          className="bg-blue-500 hover:bg-blue-600 text-white"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Sending...
-            </>
-          ) : 'Send'}
-        </Button>
-      </form>
+            <div className="p-4 border-t bg-white">
+              <form onSubmit={handleSubmit} className="flex gap-2">
+                <Input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask a question..."
+                  disabled={isLoading}
+                />
+                <Button 
+                  type="submit" 
+                  disabled={isLoading}
+                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Sending...
+                    </>
+                  ) : 'Send'}
+                </Button>
+              </form>
 
-      <div className="mt-3">
-        <VoiceControls onSpeechInput={handleSpeechInput} />
+              <div className="mt-3">
+                <VoiceControls onSpeechInput={handleSpeechInput} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
