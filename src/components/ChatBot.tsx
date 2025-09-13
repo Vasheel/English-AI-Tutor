@@ -19,7 +19,72 @@ interface ChatBotProps {
   model?: string;
 }
 
-const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are a PSAC (Primary School Achievement Certificate) Grade 6 English tutor for Mauritius. Always answer within the PSAC syllabus and exam style: clear explanations, age-appropriate vocabulary, short steps, and 1–2 PSAC-style examples. When users ask general questions, relate the answer to PSAC topics (grammar, vocabulary, comprehension, writing). If off‑syllabus, briefly redirect and connect to a relevant PSAC concept.", model = (import.meta.env.VITE_CHAT_MODEL as string) || "gpt-5" }) => {
+// Question Interceptor for Political/Current Affairs Questions
+const politicalQuestionInterceptor = (userMessage: string): string | null => {
+  const lowerMsg = userMessage.toLowerCase();
+  
+  // Prime Minister questions
+  if ((lowerMsg.includes('prime minister') || lowerMsg.includes('pm')) && lowerMsg.includes('mauritius')) {
+    return `The current Prime Minister of Mauritius is **Dr Navinchandra Ramgoolam**. He won the election in November 2024, becoming Prime Minister for the fourth time in his career.`;
+  }
+  
+  // President questions
+  if ((lowerMsg.includes('president') || lowerMsg.includes('head of state')) && lowerMsg.includes('mauritius')) {
+    return `Mauritius has a President as Head of State, but the Prime Minister (Dr Navinchandra Ramgoolam) is the Head of Government who runs the country.
+
+**PSAC Learning:** This is a good example of the difference between:
+- **Head of State** = President (ceremonial role)
+- **Head of Government** = Prime Minister (runs the government)
+
+**Writing Practice:** "Mauritius has both a President and a Prime Minister. The Prime Minister has more power in running the country."
+
+For current President information, check recent official sources as this information can change.`;
+  }
+  
+  // Government/Leader questions
+  if ((lowerMsg.includes('leader') || lowerMsg.includes('government') || lowerMsg.includes('minister')) && lowerMsg.includes('mauritius') && (lowerMsg.includes('who') || lowerMsg.includes('current'))) {
+    return `The government of Mauritius is led by Prime Minister **Dr Navinchandra Ramgoolam** (since November 2024).
+
+**PSAC Grammar Focus - Question Words:**
+- **Who** = asking about people ("Who is the Prime Minister?")
+- **What** = asking about things ("What is the capital?")
+- **When** = asking about time ("When was he elected?")
+- **Where** = asking about places ("Where is the government located?")
+
+**Example sentences:**
+- "Who leads Mauritius?" → "Dr Ramgoolam leads Mauritius."
+- "When did he become PM?" → "He became PM in November 2024."
+
+Always verify current political information with recent news sources!`;
+  }
+  
+  // Election questions
+  if (lowerMsg.includes('election') && lowerMsg.includes('mauritius') && (lowerMsg.includes('2024') || lowerMsg.includes('recent') || lowerMsg.includes('latest'))) {
+    return `The most recent Mauritius general election was held in **November 2024**. Dr Navinchandra Ramgoolam's alliance won, and he became Prime Minister for the fourth time.
+
+**PSAC Writing Skills - Describing Events:**
+- Past tense for completed events: "The election was held in November."
+- Present perfect for recent events: "Dr Ramgoolam has become Prime Minister."
+- Sequence words: "First, the election took place. Then, the results were announced. Finally, the new PM was sworn in."
+
+**Vocabulary building:**
+- Election = when people vote for leaders
+- Alliance = groups working together
+- Term = period of time in office
+
+Remember to check current news for the most up-to-date election information!`;
+  }
+  
+  return null; // No interception needed
+};
+
+// Standard system prompt for non-intercepted questions
+const STANDARD_SYSTEM_PROMPT = "You are an English learning assistant for students in Mauritius. Provide direct, concise answers without excessive examples.";
+
+const ChatBot: React.FC<ChatBotProps> = ({ 
+  systemPrompt = STANDARD_SYSTEM_PROMPT, 
+  model = (import.meta.env.VITE_CHAT_MODEL as string) || "gpt-5" 
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,9 +102,21 @@ const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are a PSAC (Prima
     };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
-    setContext(prev => [...prev, text]);
 
-    // Start loading
+    // CHECK FOR POLITICAL QUESTIONS FIRST - INTERCEPT BEFORE LLM
+    const interceptedResponse = politicalQuestionInterceptor(text);
+    if (interceptedResponse) {
+      // Provide immediate, accurate response without consulting LLM
+      setMessages(prev => [...prev, {
+        text: interceptedResponse,
+        type: 'bot',
+        timestamp: new Date().toLocaleTimeString()
+      }]);
+      return; // Exit early, don't call the LLM
+    }
+
+    // For non-political questions, proceed with normal LLM chat
+    setContext(prev => [...prev, text]);
     setIsLoading(true);
     setError(null);
 
@@ -110,7 +187,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are a PSAC (Prima
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl">PSAC English Chat Tutor</CardTitle>
-            <Badge variant="outline">PSAC Mode</Badge>
+            <Badge variant="outline">PSAC Mode • Current Facts ✓</Badge>
           </div>
         </CardHeader>
         <CardContent>
@@ -123,13 +200,13 @@ const ChatBot: React.FC<ChatBotProps> = ({ systemPrompt = "You are a PSAC (Prima
             }`}
           >
             <div
-              className={`inline-block p-4 rounded-xl ${
+              className={`inline-block p-4 rounded-xl max-w-[85%] ${
                 message.type === 'user'
                   ? 'bg-blue-500 text-white'
                   : message.error ? 'bg-red-500 text-white' : 'bg-gray-100'
               }`}
             >
-              <p className="mb-1">{message.text}</p>
+              <div className="whitespace-pre-wrap mb-1">{message.text}</div>
               <small className="block text-gray-500 text-xs">
                 {message.timestamp}
               </small>
