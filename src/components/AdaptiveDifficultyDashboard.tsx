@@ -58,16 +58,33 @@ const AdaptiveDifficultyDashboard: React.FC = () => {
     if (!user) return;
 
     try {
+      // Use activity_sessions table as it exists and tracks questions
       const { data, error } = await supabase
-        .from('question_history')
+        .from('activity_sessions')
         .select('*')
         .eq('user_id', user.id)
-        .eq('topic', selectedTopic)
+        .eq('activity_type', selectedTopic)
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw error;
-      setQuestionHistory(data || []);
+      
+      // Transform data to match QuestionHistory interface
+      const transformedData = (data || []).map(session => ({
+        id: session.id,
+        topic: session.activity_type,
+        question_text: `${session.activity_type} session`,
+        user_answer: '',
+        correct_answer: '',
+        is_correct: session.score > 0,
+        response_time: session.time_spent / session.total_questions || 0,
+        difficulty_level: session.difficulty_level || 1,
+        hints_used: 0,
+        ai_generated: false,
+        created_at: session.created_at || new Date().toISOString()
+      }));
+      
+      setQuestionHistory(transformedData);
     } catch (error) {
       console.error('Error fetching question history:', error);
       toast.error('Failed to load question history');

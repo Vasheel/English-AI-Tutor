@@ -107,6 +107,16 @@ const grammarTemplates = {
       question: "Who writes the music for songs?",
       options: ["A painter", "A composer", "A writer", "A dancer"],
       answer: "A composer"
+    },
+    {
+      question: "What is an orchestra?",
+      options: ["A sports team", "A large group of musicians", "A school", "A hospital"],
+      answer: "A large group of musicians"
+    },
+    {
+      question: "Which is a large group of musicians?",
+      options: ["Orchestra", "Team", "Class", "Group"],
+      answer: "Orchestra"
     }
   ],
   "Adventure Story": [
@@ -340,18 +350,6 @@ const grammarTemplates = {
       question: "Which word means existing in nature?",
       options: ["Artificial", "Natural", "Fake", "Man-made"],
       answer: "Natural"
-    }
-  ],
-  "Music": [
-    {
-      question: "What is an orchestra?",
-      options: ["A sports team", "A large group of musicians", "A school", "A hospital"],
-      answer: "A large group of musicians"
-    },
-    {
-      question: "Which is a large group of musicians?",
-      options: ["Orchestra", "Team", "Class", "Group"],
-      answer: "Orchestra"
     }
   ],
   "Nature": [
