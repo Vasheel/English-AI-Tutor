@@ -192,8 +192,8 @@ const ClozePage = () => {
     <div className="min-h-screen bg-edu-bg">
       <NavBar />
       <div className="container mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold mb-4 text-edu-dark">Cloze Test Practice</h1>
-        <p className="text-gray-600 mb-6">Choose a level and practise PSAC‑style cloze passages. Each blank takes one suitable word.</p>
+        <h1 className="text-3xl font-bold mb-4 text-edu-dark">Close Test Practice</h1>
+        <p className="text-gray-600 mb-6">Choose a level and practise PSAC‑style close passages. Each blank takes one suitable word.</p>
 
         <Tabs value={level} onValueChange={(v) => setLevel(v as Difficulty)} className="mb-6">
           <TabsList>

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAdaptiveDifficulty } from '@/hooks/useAdaptiveDifficulty';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -54,11 +54,12 @@ const AdaptiveDifficultyDashboard: React.FC = () => {
     { id: 'quiz', name: 'Quiz', icon: '🧠' }
   ];
 
-  const fetchQuestionHistory = async () => {
+  const fetchQuestionHistory = useCallback(async () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('question_history')
         .select('*')
         .eq('user_id', user.id)
@@ -67,18 +68,18 @@ const AdaptiveDifficultyDashboard: React.FC = () => {
         .limit(50);
 
       if (error) throw error;
-      setQuestionHistory(data || []);
+      setQuestionHistory((data as QuestionHistory[]) || []);
     } catch (error) {
       console.error('Error fetching question history:', error);
       toast.error('Failed to load question history');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, selectedTopic]);
 
   useEffect(() => {
     fetchQuestionHistory();
-  }, [selectedTopic, user]);
+  }, [fetchQuestionHistory]);
 
   const getDifficultyStats = () => {
     const stats = {

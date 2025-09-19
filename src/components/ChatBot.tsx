@@ -7,6 +7,7 @@ import { Button } from "./ui/button";
 import { Loader2, MessageSquare, Plus, Settings, Trash2, Edit2 } from "lucide-react";
 import VoiceControls from './VoiceControls';
 import { useChatSessions } from '@/hooks/useChatSessions';
+import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 
 interface ChatMessage {
   text: string;
@@ -49,11 +50,14 @@ const ChatBot: React.FC<ChatBotProps> = ({
   systemPrompt = STANDARD_SYSTEM_PROMPT, 
   model = (import.meta.env.VITE_CHAT_MODEL as string) || "gpt-5" 
 }) => {
+  const { updateProgress, addSession } = useSupabaseProgress();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [sessionStartTime, setSessionStartTime] = useState<number>(0);
+  const [messageCount, setMessageCount] = useState<number>(0);
 
   const {
     sessions,
@@ -75,6 +79,44 @@ const ChatBot: React.FC<ChatBotProps> = ({
     timestamp: new Date(msg.timestamp).toLocaleTimeString()
   }));
 
+  const trackSessionTime = async (sessionTitle: string) => {
+    if (sessionStartTime === 0) return;
+    
+    try {
+      const timeSpentSeconds = Math.max(1, Math.floor((Date.now() - sessionStartTime) / 1000));
+      
+      // Track only time spent, no scores
+      await updateProgress("psac_chat", {
+        total_attempts: 1, // Track as 1 session attempt
+        correct_answers: 0, // No scores tracked
+        total_time_spent: timeSpentSeconds,
+        current_streak: 0,
+        best_streak: 0
+      });
+
+      await addSession({
+        user_id: '', // Will be filled by the hook
+        activity_type: 'psac_chat',
+        score: 0, // No score tracking
+        total_questions: messageCount, // Track number of messages exchanged
+        time_spent: timeSpentSeconds,
+        difficulty_level: 1,
+        session_data: {
+          psac_chat_data: {
+            session_title: sessionTitle,
+            time_spent: timeSpentSeconds,
+            messages_exchanged: messageCount,
+            model_used: model
+          }
+        }
+      });
+
+      console.log('✅ PSAC Chat time tracked:', { sessionTitle, timeSpentSeconds, messageCount });
+    } catch (error) {
+      console.error('❌ Failed to track PSAC Chat time:', error);
+    }
+  };
+
   // Initialize with first session or create new one
   useEffect(() => {
     if (!loading && !currentSession && sessions.length === 0) {
@@ -86,6 +128,14 @@ const ChatBot: React.FC<ChatBotProps> = ({
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || !currentSession) return;
+
+    // Start session timer on first message
+    if (sessionStartTime === 0) {
+      setSessionStartTime(Date.now());
+    }
+
+    // Increment message count
+    setMessageCount(prev => prev + 1);
 
     // Save user message to database
     await saveMessage('user', text);
@@ -103,8 +153,15 @@ const ChatBot: React.FC<ChatBotProps> = ({
     setError(null);
 
     try {
+      // Build conversation history for API
+      const conversationHistory = messages.map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      }));
+
       const messagesForAPI = [
         { role: 'system', content: systemPrompt },
+        ...conversationHistory,
         { role: 'user', content: text }
       ];
 
@@ -142,7 +199,14 @@ const ChatBot: React.FC<ChatBotProps> = ({
   };
 
   const handleNewChat = async () => {
+    // Track time for current session before creating new one
+    if (currentSession && sessionStartTime > 0) {
+      await trackSessionTime(currentSession.title);
+    }
+    
     await createSession('New Chat');
+    setSessionStartTime(0);
+    setMessageCount(0);
   };
 
   const handleEditTitle = async (sessionId: string, newTitle: string) => {
@@ -157,6 +221,28 @@ const ChatBot: React.FC<ChatBotProps> = ({
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
   }, [messages]);
+
+  // Track time when component unmounts
+  useEffect(() => {
+    return () => {
+      if (currentSession && sessionStartTime > 0) {
+        trackSessionTime(currentSession.title);
+      }
+    };
+  }, [currentSession, sessionStartTime]);
+
+  // Periodic time tracking every 30 seconds
+  useEffect(() => {
+    if (sessionStartTime > 0 && currentSession) {
+      const interval = setInterval(() => {
+        trackSessionTime(currentSession.title);
+        // Reset timer to continue tracking
+        setSessionStartTime(Date.now());
+      }, 30000); // Every 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [sessionStartTime, currentSession]);
 
   if (loading) {
     return (

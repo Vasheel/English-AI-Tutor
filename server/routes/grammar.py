@@ -280,11 +280,11 @@ def semantic_consistency_checks(text: str) -> Tuple[List[str], int]:
     
     # Check for pronoun-noun mismatches
     if any(word in t for word in ["he", "him", "his"]) and any(word in t for word in ["woman", "girl", "lady"]):
-        warnings.append("Pronoun-noun mismatch detected")
+        warnings.append("Pronoun-noun mismatch: masculine pronoun with female noun (consider 'She is a woman' or 'He is a man')")
         penalty += 15
     
     if any(word in t for word in ["she", "her", "hers"]) and any(word in t for word in ["man", "boy", "gentleman"]):
-        warnings.append("Pronoun-noun mismatch detected")
+        warnings.append("Pronoun-noun mismatch: feminine pronoun with male noun (consider 'She is a woman' or 'He is a man')")
         penalty += 15
     
     return warnings, penalty
@@ -295,9 +295,10 @@ def evaluate(req: EvalRequest):
     system = (
         "You correct English sentences for Grade 6. "
         f"Use {req.dialect} spelling. "
-        "When mode='minimal', make the smallest edits that fix grammar/punctuation. "
-        "Keep the student's voice. "
-        "Only correct clear grammatical errors, not valid alternative word orders."
+        "When mode='minimal', make the smallest edits that fix grammar/punctuation AND obvious semantic errors. "
+        "For pronoun-noun mismatches (like 'She is a man'), suggest the most logical correction (either 'She is a woman' or 'He is a man'). "
+        "Keep the student's voice but prioritize logical meaning. "
+        "Only correct clear grammatical errors and obvious semantic inconsistencies."
     )
     user = f"Original: {req.text}\nMode: {req.mode}\nGrade: {req.grade_level}\nReturn only the corrected sentence."
     

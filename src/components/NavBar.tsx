@@ -2,9 +2,11 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import UserProfile from "@/components/UserProfile";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 const NavBar = () => {
   const location = useLocation();
+  const { isAdmin } = useAdminAuth();
 
   const navItems = [
     { path: "/", label: "Home", icon: "🏠" },
@@ -45,6 +47,21 @@ const NavBar = () => {
                 </Button>
               </Link>
             ))}
+            {isAdmin && (
+              <Link to="/admin">
+                <Button
+                  variant={location.pathname === "/admin" ? "default" : "ghost"}
+                  className={`flex items-center space-x-2 ${
+                    location.pathname === "/admin" 
+                      ? "bg-red-600 text-white" 
+                      : "text-gray-700 hover:text-red-600"
+                  }`}
+                >
+                  <span>🛡️</span>
+                  <span>Admin</span>
+                </Button>
+              </Link>
+            )}
           </div>
 
           <div className="flex items-center space-x-4">

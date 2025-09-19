@@ -583,7 +583,7 @@ const ExerciseGenerator = () => {
       await updateProgress("grammar_exercises", {
         total_attempts: 1,
         correct_answers: isCorrect ? 1 : 0,
-        total_time_spent: Math.max(1, Math.floor(sessionTime / 60)), // Convert to minutes
+        total_time_spent: Math.max(1, sessionTime), // Keep in seconds
         best_streak: isCorrect ? 1 : 0
       });
 
@@ -592,7 +592,7 @@ const ExerciseGenerator = () => {
         activity_type: 'grammar_exercises',
         score: isCorrect ? 1 : 0,
         total_questions: 1,
-        time_spent: Math.max(30, sessionTime),
+        time_spent: Math.max(1, sessionTime), // Keep in seconds
         difficulty_level: 1,
         session_data: {
           grammar_exercise_data: {

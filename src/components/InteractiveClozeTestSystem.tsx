@@ -500,7 +500,7 @@ export default function InteractiveClozeTestSystem() {
           <CardHeader className="text-center">
             <CardTitle className="text-4xl font-bold text-white flex items-center justify-center gap-3">
               <Sparkles className="w-10 h-10" />
-              Interactive Cloze Test Practice System
+              Interactive Close Test Practice System
             </CardTitle>
             <p className="text-white/90 mt-2 text-lg">
               Master your English comprehension skills with progressive exercises

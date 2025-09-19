@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import VoiceControls from "@/components/VoiceControls";
+import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
 
 const GrammarTutor: React.FC = () => {
+  const { updateProgress, addSession } = useSupabaseProgress();
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sessionStartTime, setSessionStartTime] = useState<number>(0);
   const grammarCheckRef = useRef<() => Promise<void>>(null);
 
   const handleGrammarCheck = useCallback(async () => {
@@ -48,6 +51,39 @@ const GrammarTutor: React.FC = () => {
         setError("No response from OpenAI.");
       } else {
         setOutput(reply);
+        
+        // Track progress for grammar tutor
+        try {
+          const timeSpentSeconds = Math.max(1, Math.floor((Date.now() - sessionStartTime) / 1000));
+          
+          await updateProgress("grammar_tutor", {
+            total_attempts: 1,
+            correct_answers: 1, // Assume grammar check is helpful
+            total_time_spent: timeSpentSeconds,
+            current_streak: 1,
+            best_streak: 1
+          });
+
+          await addSession({
+            user_id: '', // Will be filled by the hook
+            activity_type: 'grammar_tutor',
+            score: 1,
+            total_questions: 1,
+            time_spent: timeSpentSeconds,
+            difficulty_level: 1,
+            session_data: {
+              grammar_tutor_data: {
+                input_text: input,
+                output_text: reply,
+                time_spent: timeSpentSeconds
+              }
+            }
+          });
+
+          console.log('✅ Grammar Tutor progress saved:', { timeSpentSeconds });
+        } catch (error) {
+          console.error('❌ Failed to save Grammar Tutor progress:', error);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -61,9 +97,18 @@ const GrammarTutor: React.FC = () => {
     grammarCheckRef.current = handleGrammarCheck;
   }, [handleGrammarCheck]);
 
+  // Start session timer when component mounts
+  useEffect(() => {
+    setSessionStartTime(Date.now());
+  }, []);
+
   const handleSpeechInput = useCallback((speech: string) => {
     setInput(speech);
-  }, []);
+    // Start session timer when user starts using the component
+    if (sessionStartTime === 0) {
+      setSessionStartTime(Date.now());
+    }
+  }, [sessionStartTime]);
 
   useEffect(() => {
     if (output) {

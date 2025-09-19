@@ -91,13 +91,13 @@ const WordScramble = () => {
 
   const updateProgressData = useCallback(async (correct: boolean) => {
     const currentProgress = getProgressByType('word_scramble');
-    const timeSpent = Math.floor((Date.now() - sessionStartTime) / 60000); // Convert to minutes
+    const timeSpentSeconds = Math.max(1, Math.floor((Date.now() - sessionStartTime) / 1000)); // Convert to seconds
     
     // Update user progress
     await updateProgress('word_scramble', {
       total_attempts: (currentProgress?.total_attempts || 0) + 1,
       correct_answers: (currentProgress?.correct_answers || 0) + (correct ? 1 : 0),
-      total_time_spent: (currentProgress?.total_time_spent || 0) + Math.max(1, timeSpent),
+      total_time_spent: (currentProgress?.total_time_spent || 0) + timeSpentSeconds,
       current_streak: correct ? (currentProgress?.current_streak || 0) + 1 : 0,
       best_streak: correct ? Math.max((currentProgress?.best_streak || 0), (currentProgress?.current_streak || 0) + 1) : (currentProgress?.best_streak || 0)
     });
@@ -108,7 +108,7 @@ const WordScramble = () => {
       activity_type: 'word_scramble',
       score: correct ? 1 : 0,
       total_questions: 1,
-      time_spent: Math.max(30, Math.floor((Date.now() - sessionStartTime) / 1000)), // In seconds
+      time_spent: timeSpentSeconds, // In seconds
       difficulty_level: currentDifficulty,
       session_data: {
         word_scramble_data: {

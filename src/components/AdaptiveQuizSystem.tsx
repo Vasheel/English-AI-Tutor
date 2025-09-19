@@ -5,12 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Trophy, TrendingUp, TrendingDown, Target, Brain, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, Target, Brain, Clock, CheckCircle, XCircle, Home, ArrowLeft } from 'lucide-react';
 import { generateQuiz, BackendQuizResponse } from '@/lib/api';
+import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Home, ArrowLeft } from 'lucide-react'; // Add Home and ArrowLeft icons
+import { supabase } from '@/integrations/supabase/client';
 
 // Type definitions for database operations
 interface StudentProgress {
@@ -67,6 +67,7 @@ const DIFFICULTY_LEVELS = {
 
 export default function AdaptiveQuizSystem() {
   const { toast } = useToast();
+  const { updateProgress, addSession } = useSupabaseProgress();
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
   
@@ -92,6 +93,7 @@ export default function AdaptiveQuizSystem() {
   // Timer state
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
   const [questionTimes, setQuestionTimes] = useState<number[]>([]);
+  const [quizSessionStartTime, setQuizSessionStartTime] = useState<number>(Date.now());
 
   // Add this right after your state declarations
   useEffect(() => {
@@ -223,12 +225,15 @@ const generateRandomQuiz = async () => {
         // Persist for next run comparison
         try {
           window.localStorage?.setItem('last_smart_quiz_questions', JSON.stringify(currentQuestions.slice(0, 5)));
-        } catch {}
+        } catch (error) {
+          console.warn('Failed to save quiz questions to localStorage:', error);
+        }
       }
   
       if (quizData.items && quizData.items.length > 0) {
         setCurrentQuiz(quizData);
         setQuestionStartTime(Date.now());
+        setQuizSessionStartTime(Date.now()); // Reset quiz session timer
         
         // Show more detailed toast
         toast({
@@ -373,35 +378,41 @@ const generateRandomQuiz = async () => {
     setCurrentDifficulty(newDifficulty);
     setPerformance(newPerformance);
 
-    // Save progress to database (commented out - tables don't exist in current schema)
-    // try {
-    //   await supabase.rpc('update_student_progress_adaptive' as never, {
-    //     p_user_id: userId,
-    //     p_topic: 'adaptive_quiz',
-    //     p_is_correct: accuracy >= 60,
-    //     p_response_time: avgTime,
-    //     p_hints_used: 0
-    //   });
+    // Save progress to database
+    try {
+      const timeSpentSeconds = Math.max(1, Math.floor((Date.now() - quizSessionStartTime) / 1000));
+      const isCorrect = accuracy >= 60; // 60% threshold for "correct"
 
-    //   // Log each question to history
-    //   for (let i = 0; i < currentQuiz.items.length; i++) {
-    //     const item = currentQuiz.items[i];
-    //     await supabase.from('question_history' as never).insert({
-    //       user_id: userId,
-    //       topic: 'adaptive_quiz',
-    //       question_text: item.question,
-    //       user_answer: answers[i],
-    //       correct_answer: typeof item.answer === 'number' ? item.options[item.answer] : item.answer,
-    //       is_correct: answers[i] === (typeof item.answer === 'number' ? item.options[item.answer] : item.answer),
-    //       response_time: times[i],
-    //       difficulty_level: currentDifficulty,
-    //       hints_used: 0,
-    //       ai_generated: true
-    //     });
-    //   }
-    // } catch (error) {
-    //   console.error('Failed to save progress:', error);
-    // }
+      await updateProgress("smart_quiz", {
+        total_attempts: 1,
+        correct_answers: isCorrect ? 1 : 0,
+        total_time_spent: timeSpentSeconds,
+        current_streak: isCorrect ? 1 : 0,
+        best_streak: isCorrect ? 1 : 0
+      });
+
+      await addSession({
+        user_id: '', // Will be filled by the hook
+        activity_type: 'smart_quiz',
+        score: correct,
+        total_questions: currentQuiz.items.length,
+        time_spent: timeSpentSeconds,
+        difficulty_level: currentDifficulty,
+        session_data: {
+          smart_quiz_data: {
+            accuracy: accuracy,
+            correct_answers: correct,
+            total_questions: currentQuiz.items.length,
+            difficulty_level: currentDifficulty,
+            avg_response_time: avgTime
+          }
+        }
+      });
+
+      console.log('✅ Smart Quiz progress saved:', { accuracy, correct, timeSpentSeconds });
+    } catch (error) {
+      console.error('❌ Failed to save Smart Quiz progress:', error);
+    }
 
     setShowResults(true);
   };

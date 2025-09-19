@@ -1,11 +1,11 @@
 import NavBar from "@/components/NavBar";
-import SupabaseProgressDashboard from "@/components/SupabaseProgressDashboard";
+import ProgressDashboard from "@/components/ProgressDashboard";
 import AchievementBadge from "@/components/AchievementBadge";
-import StudentProgressCard from "@/components/StudentProgressCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import SpeakButton from "@/components/SpeakButton";
+import { useSessionTracking } from "@/hooks/useSessionTracking";
 
 // Sample data structures
 const progressData = [
@@ -90,6 +90,9 @@ const chartData = [
 const Progress = () => {
   const [selectedSubject, setSelectedSubject] = useState<'reading' | 'english' | 'math' | 'science'>('english');
   const [viewType, setViewType] = useState<'weekly' | 'cumulative'>('weekly');
+  
+  // Initialize session tracking
+  const { loading: sessionLoading } = useSessionTracking();
 
   return (
     <div className="min-h-screen bg-background">
@@ -103,8 +106,8 @@ const Progress = () => {
           Track your achievements and monitor your academic growth.
         </p>
 
-        {/* Old-style dashboard replacing subject-based cards and chart */}
-        <SupabaseProgressDashboard />
+        {/* Session tracking dashboard */}
+        <ProgressDashboard />
 
         {/*
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">

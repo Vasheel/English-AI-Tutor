@@ -1,21 +1,12 @@
 import NavBar from "@/components/NavBar";
 import SubjectCard from "@/components/SubjectCard";
-import SupabaseProgressDashboard from "@/components/SupabaseProgressDashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSupabaseProgress } from "@/hooks/useSupabaseProgress";
 import { useNavigate, useLocation } from 'react-router-dom';
 import SpeakButton from "@/components/SpeakButton";
 
 const Index = () => {
-  const { progress } = useSupabaseProgress();
   const location = useLocation();
   const navigate = useNavigate();
-
-  const getProgressForActivity = (activityType: string) => {
-    const activityProgress = progress.find(p => p.activity_type === activityType);
-    if (!activityProgress || activityProgress.total_attempts === 0) return 0;
-    return Math.round((activityProgress.correct_answers / activityProgress.total_attempts) * 100);
-  };
 
   const subjects = [
     {
@@ -59,6 +50,13 @@ const Index = () => {
       color: "bg-edu-indigo",
       progress: 45,
       route: "/cloze"
+    },
+    {
+      title: "Cultural Vocabulary",
+      icon: "🇲🇺",
+      color: "bg-green-500",
+      progress: 0,
+      route: "/cultural-vocabulary"
     },
     {
       title: "Smart Quiz",
@@ -118,16 +116,6 @@ const Index = () => {
               route={subject.route}
             />
           ))}
-        </div>
-
-        <div className="mb-12">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold mb-4">Your Progress</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              Track your learning journey and see how you're improving across different activities!
-            </p>
-          </div>
-          <SupabaseProgressDashboard />
         </div>
 
         <Card className="bg-gradient-to-r from-edu-purple to-edu-light-purple text-white">

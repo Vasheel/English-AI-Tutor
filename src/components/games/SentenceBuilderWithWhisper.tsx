@@ -15,7 +15,7 @@ import { resumeAudioContext } from '@/utils/audioContext';
 import { sentenceDatabase, getRandomSentence, Sentence } from '@/data/sentences';
 import { useStudentProgress } from '@/hooks/useStudentProgress';
 import { ProgressDashboard } from '@/components/ProgressCircle';
-import { useProgress } from '@/hooks/useProgress';
+import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 
 interface Word {
   id: string;
@@ -45,7 +45,7 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   } = useStudentProgress();
   
   // Dashboard progress tracking
-  const { updateProgress: updateDashboardProgress } = useProgress();
+  const { updateProgress: updateDashboardProgress, addSession } = useSupabaseProgress();
   
   // State for difficulty selection and UI
   const [selectedDifficulty, setSelectedDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
@@ -162,7 +162,24 @@ const SentenceBuilderWithWhisper: React.FC = () => {
       await updateDashboardProgress("sentence_builder", {
         total_attempts: 1,
         correct_answers: isCorrect ? 1 : 0,
-        total_time_spent: Math.max(1, Math.floor(timeToComplete / 60)) // Convert to minutes
+        total_time_spent: Math.max(1, Math.floor(timeToComplete)) // Keep in seconds
+      });
+
+      await addSession({
+        user_id: '', // Will be filled by the hook
+        activity_type: 'sentence_builder',
+        score: isCorrect ? 1 : 0,
+        total_questions: 1,
+        time_spent: Math.max(1, Math.floor(timeToComplete)),
+        difficulty_level: selectedDifficulty === 'beginner' ? 1 : selectedDifficulty === 'intermediate' ? 2 : 3,
+        session_data: {
+          sentence_builder_data: {
+            accuracy: accuracy,
+            is_correct: isCorrect,
+            difficulty: selectedDifficulty,
+            time_to_complete: timeToComplete
+          }
+        }
       });
     } catch (error) {
       console.error("Error updating dashboard progress:", error);
@@ -348,13 +365,34 @@ const SentenceBuilderWithWhisper: React.FC = () => {
           timeSpent: sessionTime
         });
         
-        // Update dashboard progress (for database)
+        // Update dashboard progress (for database) with proper time calculation
+        const timeSpentSeconds = Math.max(1, sessionTime); // sessionTime is already in seconds
         updateDashboardProgress("sentence_builder", {
           total_attempts: 1,
           correct_answers: 1,
-          total_time_spent: Math.max(1, Math.floor(sessionTime / 60)) // Convert to minutes
+          total_time_spent: timeSpentSeconds
         }).catch(error => {
           console.error("Error updating dashboard progress:", error);
+        });
+
+        // Add session record
+        addSession({
+          user_id: '', // Will be filled by the hook
+          activity_type: 'sentence_builder',
+          score: 1,
+          total_questions: 1,
+          time_spent: timeSpentSeconds,
+          difficulty_level: selectedDifficulty === 'beginner' ? 1 : selectedDifficulty === 'intermediate' ? 2 : 3,
+          session_data: {
+            sentence_builder_data: {
+              is_correct: true,
+              difficulty: selectedDifficulty,
+              time_spent: timeSpentSeconds,
+              completion_method: 'drag_and_drop'
+            }
+          }
+        }).catch(error => {
+          console.error("Error adding session:", error);
         });
         
         setTimeout(() => {

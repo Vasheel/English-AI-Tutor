@@ -107,42 +107,56 @@ const SupabaseProgressDashboard: React.FC = () => {
   const totalCorrect = progress.reduce((sum, p) => sum + (p.correct_answers || 0), 0);
   const totalTimeSpent = progress.reduce((sum, p) => sum + (p.total_time_spent || 0), 0);
 
-  // Format time spent
-  const totalTimeMinutes = Math.floor(totalTimeSpent / 60);
-  const totalTimeSeconds = totalTimeSpent % 60;
-  const formattedTime = totalTimeMinutes > 0 
-    ? `${totalTimeMinutes}m ${totalTimeSeconds}s`
-    : `${totalTimeSeconds}s`;
+  // Format time spent properly
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${secs}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
+  };
+
+  const formattedTime = formatTime(totalTimeSpent);
   
   // Calculate overall accuracy without capping at 100%
   const overallAccuracy = totalAttempts > 0 
     ? Math.round((totalCorrect / totalAttempts) * 100)
     : 0;
 
-  // Activity display name mapping - Updated to match your requirements
+  // Activity display name mapping - Updated to include ALL components
   const getActivityDisplayName = (activityType: string) => {
     const nameMap: { [key: string]: string } = {
       'grammar_exercises': 'Grammar Exercises',
       'word_scramble': 'Word Scramble', 
       'sentence_builder': 'Sentence Builder',
-      'cloze': 'Cloze',
+      'cloze': 'Close Test',
       'smart_quiz': 'Smart Quiz',
       'image_quiz': 'Image Quiz',
+      'topic_questions': 'Topic Questions',
+      'reading_comprehension': 'Reading Comprehension',
       // Legacy mappings for backward compatibility
       'quiz': 'Smart Quiz', // Map old 'quiz' to 'Smart Quiz'
-      'reading_comprehension': 'Reading'
+      'reading': 'Reading Comprehension'
     };
     return nameMap[activityType] || activityType.replace('_', ' ').toUpperCase();
   };
 
-  // Updated valid activities to match your requirements
+  // Updated valid activities to include ALL components
   const validActivities = [
     'grammar_exercises', 
     'word_scramble', 
-    'sentence_builder', 
-    'cloze', 
-    'smart_quiz', 
-    'image_quiz'
+    'sentence_builder',
+    'cloze',
+    'smart_quiz',
+    'image_quiz',
+    'topic_questions',
+    'reading_comprehension'
   ];
   
   // Include legacy 'quiz' activity and map it to smart_quiz for display
@@ -282,11 +296,7 @@ const SupabaseProgressDashboard: React.FC = () => {
               ? Math.round((activity.correct_answers / activity.total_attempts) * 100)
               : 0;
             
-            const timeMinutes = Math.floor((activity.total_time_spent || 0) / 60);
-            const timeSeconds = (activity.total_time_spent || 0) % 60;
-            const timeDisplay = timeMinutes > 0 
-              ? `${timeMinutes}m ${timeSeconds}s`
-              : `${timeSeconds}s`;
+            const timeDisplay = formatTime(activity.total_time_spent || 0);
 
             return (
               <div key={activity.activity_type} className="p-4 border rounded-lg bg-white shadow-sm">

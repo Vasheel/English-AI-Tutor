@@ -1,32 +1,36 @@
-import GrammarTutor from "./pages/GrammarTutor";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider } from "@/contexts/AuthContext.tsx";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import Index from "./pages/Index";
-import Exercises from "./pages/Exercises";
-import Grammar from "./pages/Grammar";
-import Quizzes from "./pages/Quizzes";
-import Progress from "./pages/Progress";
-import Games from "./pages/Games";
-import ReadingPage from "@/pages/Reading";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import VoiceControls from "@/components/VoiceControls";
-import ChatBot from "@/components/ChatBot";
 import { ProgressProvider } from "@/contexts/ProgressContext";
-import ExerciseGenerator from "@/components/ExerciseGenerator";
-import AIQuestionDemo from "@/components/AIQuestionDemo";
-import AdaptiveQuizSystem from "@/components/AdaptiveQuizSystem";
-import ImageQuiz from "@/pages/ImageQuiz";
-import DiagnosticPage from './pages/DiagnosticPage';
-import InteractiveClozeTestSystem from '@/components/InteractiveClozeTestSystem';
-import SentenceBuilderWithWhisper from '@/components/games/SentenceBuilderWithWhisper';
-import EnvTest from '@/components/EnvTest';
-import WhisperDebugTest from '@/components/WhisperDebugTest';
+import { lazy, Suspense } from "react";
+
+// Lazy load components for better performance
+const GrammarTutor = lazy(() => import("./pages/GrammarTutor"));
+const Index = lazy(() => import("./pages/Index"));
+const Exercises = lazy(() => import("./pages/Exercises"));
+const Grammar = lazy(() => import("./pages/Grammar"));
+const Quizzes = lazy(() => import("./pages/Quizzes"));
+const Progress = lazy(() => import("./pages/Progress"));
+const Games = lazy(() => import("./pages/Games"));
+const ReadingPage = lazy(() => import("@/pages/Reading"));
+const Auth = lazy(() => import("./pages/Auth"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const VoiceControls = lazy(() => import("@/components/VoiceControls"));
+const ChatBot = lazy(() => import("@/components/ChatBot"));
+const ExerciseGenerator = lazy(() => import("@/components/ExerciseGenerator"));
+const AIQuestionDemo = lazy(() => import("@/components/AIQuestionDemo"));
+const AdaptiveQuizSystem = lazy(() => import("@/components/AdaptiveQuizSystem"));
+const ImageQuiz = lazy(() => import("@/pages/ImageQuiz"));
+const DiagnosticPage = lazy(() => import('./pages/DiagnosticPage'));
+const InteractiveClozeTestSystem = lazy(() => import('@/components/InteractiveClozeTestSystem'));
+const SentenceBuilderWithWhisper = lazy(() => import('@/components/games/SentenceBuilderWithWhisper'));
+const WhisperDebugTest = lazy(() => import('@/components/WhisperDebugTest'));
+const Admin = lazy(() => import('./pages/Admin'));
+const CulturalVocabulary = lazy(() => import('@/components/CulturalVocabulary'));
 
 const queryClient = new QueryClient();
 
@@ -39,7 +43,12 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
           <div className="min-h-screen bg-background">
-            <Routes>
+            <Suspense fallback={
+              <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+              </div>
+            }>
+              <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={
                 <ProtectedRoute>
@@ -128,11 +137,22 @@ const App = () => (
                   <SentenceBuilderWithWhisper />
                 </ProtectedRoute>
               } />
-              <Route path="/env-test" element={<EnvTest />} />
+              <Route path="/admin" element={
+                <ProtectedRoute>
+                  <Admin />
+                </ProtectedRoute>
+              } />
+              <Route path="/cultural-vocabulary" element={
+                <ProtectedRoute>
+                  <CulturalVocabulary />
+                </ProtectedRoute>
+              } />
+              
                          
 
               <Route path="*" element={<NotFound />} />
-            </Routes>
+              </Routes>
+            </Suspense>
             <VoiceControls 
               onSpeechInput={(text) => {
                 // Handle the speech input here

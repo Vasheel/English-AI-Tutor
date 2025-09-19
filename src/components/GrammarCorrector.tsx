@@ -1,9 +1,10 @@
 
 import { useState } from "react";
-import { Loader, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader, CheckCircle, AlertCircle, RefreshCw, Globe } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { evaluateGrammar, type GrammarEvaluateResponse } from "@/lib/api";
+import { mauritianGrammarExamples } from "@/data/mauritianCulturalContent";
 
 
 
@@ -364,6 +365,49 @@ const GrammarCorrector = () => {
           </button>
         </div>
       )}
+
+      {/* Cultural Examples Section */}
+      <div className="mt-8 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe className="h-5 w-5 text-green-600" />
+          <h4 className="font-semibold text-green-800">🇲🇺 Mauritian Cultural Examples</h4>
+        </div>
+        <p className="text-sm text-green-700 mb-4">
+          Try these sentences about Mauritius to practice your grammar with cultural context!
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {mauritianGrammarExamples.map((example, index) => (
+            <div
+              key={index}
+              className="p-3 bg-white border border-green-200 rounded-lg cursor-pointer hover:shadow-sm transition-shadow"
+              onClick={() => {
+                setInput(example.sentence);
+                correctGrammar();
+              }}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800 mb-1">
+                    "{example.sentence}"
+                  </p>
+                  <p className="text-xs text-gray-600 mb-2">
+                    {example.culturalContext}
+                  </p>
+                  <p className="text-xs text-green-600">
+                    {example.explanation}
+                  </p>
+                </div>
+                <button className="ml-2 text-green-600 hover:text-green-800">
+                  <CheckCircle className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-green-600 mt-3">
+          💡 Click on any example to check its grammar!
+        </p>
+      </div>
     </div>
   );
 };

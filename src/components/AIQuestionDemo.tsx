@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Brain, RefreshCw } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Brain, RefreshCw, Loader2, Flag } from 'lucide-react';
+import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 import type { AIQuestionResult } from '@/utils/generateAIQuestion';
+import { mauritianTopics } from '@/data/mauritianCulturalContent';
 
 const AIQuestionDemo: React.FC = () => {
+  const { updateProgress, addSession } = useSupabaseProgress();
   const [currentQuestion, setCurrentQuestion] = useState<AIQuestionResult | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [questions, setQuestions] = useState<AIQuestionResult[]>([]);
@@ -14,6 +19,7 @@ const AIQuestionDemo: React.FC = () => {
   const [showResult, setShowResult] = useState(false);
   const [error, setError] = useState<string>('');
   const [weeklyLimits, setWeeklyLimits] = useState<Record<string, string>>({});
+  const [sessionStartTime, setSessionStartTime] = useState<number>(0);
 
   const topics = [
     'tenses',
@@ -22,7 +28,9 @@ const AIQuestionDemo: React.FC = () => {
     'parts of speech',
     'vocabulary',
     'grammar',
-    'comprehension'
+    'mauritian-history',
+    'mauritian-culture',
+    'mauritian-geography'
   ] as const;
 
   // Weekly limit helper functions
@@ -68,6 +76,43 @@ const AIQuestionDemo: React.FC = () => {
     return Math.max(0, daysUntil);
   };
 
+  const trackSessionTime = async (topic: string) => {
+    if (sessionStartTime === 0) return;
+    
+    try {
+      const timeSpentSeconds = Math.max(1, Math.floor((Date.now() - sessionStartTime) / 1000));
+      
+      // Track only time spent, no scores
+      await updateProgress("topic_questions", {
+        total_attempts: 1, // Track as 1 session attempt
+        correct_answers: 0, // No scores tracked
+        total_time_spent: timeSpentSeconds,
+        current_streak: 0,
+        best_streak: 0
+      });
+
+      await addSession({
+        user_id: '', // Will be filled by the hook
+        activity_type: 'topic_questions',
+        score: 0, // No score tracking
+        total_questions: 0, // No question tracking
+        time_spent: timeSpentSeconds,
+        difficulty_level: 1,
+        session_data: {
+          topic_questions_data: {
+            topic: topic,
+            time_spent: timeSpentSeconds,
+            questions_attempted: questions.length,
+            questions_completed: currentQuestionIndex + 1
+          }
+        }
+      });
+
+      console.log('✅ Topic Questions time tracked:', { topic, timeSpentSeconds, questionsAttempted: questions.length, questionsCompleted: currentQuestionIndex + 1 });
+    } catch (error) {
+      console.error('❌ Failed to track Topic Questions time:', error);
+    }
+  };
 
   // Static questions for each topic
   const staticQuestions: Record<string, AIQuestionResult[]> = {
@@ -865,6 +910,39 @@ const AIQuestionDemo: React.FC = () => {
 
       console.log(`🎯 Loading ${topic} questions...`);
       
+      // Check if it's a cultural topic
+      const isCulturalTopic = topic.startsWith('mauritian-');
+      
+      if (isCulturalTopic) {
+        // Use pre-written Mauritian cultural questions
+        const culturalTopic = mauritianTopics.find(t => t.id === topic);
+        if (culturalTopic && culturalTopic.questions.length > 0) {
+          const culturalQuestions = culturalTopic.questions.map(q => ({
+            question: q.question,
+            options: q.options || [],
+            correctAnswer: q.correct_answer,
+            explanation: q.explanation,
+            topic: topic,
+            difficulty: culturalTopic.difficulty
+          }));
+          
+          // Shuffle and take 5 questions
+          const shuffledQuestions = [...culturalQuestions].sort(() => Math.random() - 0.5);
+          const selectedQuestions = shuffledQuestions.slice(0, Math.min(5, shuffledQuestions.length));
+          
+          setQuestions(selectedQuestions);
+          setCurrentQuestion(selectedQuestions[0]);
+          setCurrentQuestionIndex(0);
+          setLastAttemptDate(topic);
+          setSessionStartTime(Date.now());
+          return;
+        } else {
+          setError(`No cultural questions available for topic: ${topic}`);
+          return;
+        }
+      }
+      
+      // For non-cultural topics, use static questions
       const topicQuestions = staticQuestions[topic] || [];
       if (topicQuestions.length === 0) {
         setError(`No questions available for topic: ${topic}`);
@@ -878,6 +956,9 @@ const AIQuestionDemo: React.FC = () => {
       setQuestions(selectedQuestions);
       setCurrentQuestionIndex(0);
       setCurrentQuestion(selectedQuestions[0]);
+      
+      // Start session timer for time tracking
+      setSessionStartTime(Date.now());
       
       // Record this attempt
       setLastAttemptDate(topic);
@@ -911,6 +992,28 @@ const AIQuestionDemo: React.FC = () => {
       setShowResult(false);
     }
   };
+
+  // Track time when component unmounts or questions change
+  useEffect(() => {
+    return () => {
+      if (questions.length > 0 && currentQuestion && sessionStartTime > 0) {
+        trackSessionTime(currentQuestion.topic);
+      }
+    };
+  }, [questions, currentQuestion, sessionStartTime]);
+
+  // Periodic time tracking every 30 seconds
+  useEffect(() => {
+    if (sessionStartTime > 0 && questions.length > 0 && currentQuestion) {
+      const interval = setInterval(() => {
+        trackSessionTime(currentQuestion.topic);
+        // Reset timer to continue tracking
+        setSessionStartTime(Date.now());
+      }, 30000); // Every 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [sessionStartTime, questions.length, currentQuestion]);
 
 
   const checkAnswer = () => {
@@ -950,6 +1053,7 @@ const AIQuestionDemo: React.FC = () => {
                 const canAttempt = canAttemptTopic(topic);
                 const daysLeft = getDaysUntilNextAttempt(topic);
                 const nextDate = getNextAttemptDate(topic);
+                const isCulturalTopic = topic.startsWith('mauritian-');
                 
                 return (
                   <div key={topic} className="flex flex-col items-center gap-1">
@@ -958,9 +1062,12 @@ const AIQuestionDemo: React.FC = () => {
                       size="sm"
                       onClick={() => generateQuestions(topic)}
                       disabled={loading || !canAttempt}
-                      className={!canAttempt ? "opacity-60" : ""}
+                      className={`${!canAttempt ? "opacity-60" : ""} ${isCulturalTopic ? "border-green-300 text-green-700 hover:bg-green-50" : ""}`}
                     >
-                      {topic}
+                      <div className="flex items-center gap-1">
+                        {isCulturalTopic && <Flag className="h-3 w-3" />}
+                        {topic.replace('mauritian-', '').replace('-', ' ')}
+                      </div>
                     </Button>
                     {!canAttempt && (
                       <span className="text-xs text-gray-500 text-center">
@@ -1080,6 +1187,27 @@ const AIQuestionDemo: React.FC = () => {
                 </Button>
               </div>
             )}
+
+            {/* Back/Finish Button */}
+            <div className="flex justify-center mt-4">
+              <Button
+                onClick={() => {
+                  // Track session time when user finishes
+                  if (questions.length > 0 && currentQuestion) {
+                    trackSessionTime(currentQuestion.topic);
+                  }
+                  // Reset to topic selection
+                  setQuestions([]);
+                  setCurrentQuestion(null);
+                  setCurrentQuestionIndex(0);
+                  setSessionStartTime(0);
+                }}
+                variant="outline"
+                className="bg-gray-100 hover:bg-gray-200"
+              >
+                ← Back to Topics
+              </Button>
+            </div>
 
             {showResult && (
               <div className={`p-4 rounded-md ${

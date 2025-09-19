@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useProgress } from '@/hooks/useProgress';
+import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 import { Progress } from '@/components/ui/progress';
 import { 
   Image, 
@@ -212,7 +213,9 @@ export default function ImageDescriptionQuiz({
 
   // Progress tracking
   const { updateProgress, fetchProgress } = useProgress();
+  const { updateProgress: updateSupabaseProgress, addSession } = useSupabaseProgress();
   const [startTime, setStartTime] = useState<number>(Date.now());
+  const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now());
 
   // Level + rotating images loaded from backend
   const [currentLevel, setCurrentLevel] = useState<'easy' | 'medium' | 'hard'>(() => {
@@ -324,10 +327,25 @@ export default function ImageDescriptionQuiz({
         console.log(`⏱️ Time spent: ${timeSpentSeconds} seconds`);
         console.log(`✅ Correct: ${isCorrect} (Score: ${mapped.score}, Context passed: ${mapped.context_passed})`);
         
-        await updateProgress("image_quiz", progressUpdate);
+        await updateSupabaseProgress("image_quiz", progressUpdate);
         
-        // Refresh progress data to update dashboard
-        await fetchProgress();
+        await addSession({
+          user_id: '', // Will be filled by the hook
+          activity_type: 'image_quiz',
+          score: mapped.score || 0,
+          total_questions: 1,
+          time_spent: Math.max(1, timeSpentSeconds),
+          difficulty_level: currentLevel === 'easy' ? 1 : currentLevel === 'medium' ? 2 : 3,
+          session_data: {
+            image_quiz_data: {
+              score: mapped.score || 0,
+              is_correct: isCorrect,
+              difficulty: currentLevel,
+              time_spent: timeSpentSeconds,
+              use_vision_api: useVisionAPI
+            }
+          }
+        });
         
         console.log(`✅ Image quiz progress updated successfully`);
       } catch (error) {
@@ -372,8 +390,27 @@ export default function ImageDescriptionQuiz({
         };
         
         console.log(`📈 Image Quiz Fallback Progress Update:`, progressUpdate);
-        await updateProgress("image_quiz", progressUpdate);
-        await fetchProgress();
+        await updateSupabaseProgress("image_quiz", progressUpdate);
+        
+        await addSession({
+          user_id: '', // Will be filled by the hook
+          activity_type: 'image_quiz',
+          score: result.score,
+          total_questions: 1,
+          time_spent: Math.max(1, timeSpentSeconds),
+          difficulty_level: currentLevel === 'easy' ? 1 : currentLevel === 'medium' ? 2 : 3,
+          session_data: {
+            image_quiz_data: {
+              score: result.score,
+              is_correct: result.isCorrect,
+              difficulty: currentLevel,
+              time_spent: timeSpentSeconds,
+              use_vision_api: false,
+              validation_method: 'fallback'
+            }
+          }
+        });
+        
         console.log(`✅ Image quiz fallback progress updated`);
       } catch (error) {
         console.error("Error updating image quiz fallback progress:", error);
@@ -407,6 +444,17 @@ export default function ImageDescriptionQuiz({
       default: return 'bg-blue-500';
     }
   };
+
+  // Initialize session timer when component mounts
+  useEffect(() => {
+    setSessionStartTime(Date.now());
+    setStartTime(Date.now());
+  }, []);
+
+  // Reset timer when image changes
+  useEffect(() => {
+    setStartTime(Date.now());
+  }, [imgIndex, currentLevel]);
 
   // Fetch images for the selected level
   useEffect(() => {
@@ -531,7 +579,7 @@ export default function ImageDescriptionQuiz({
             )}
           </CardTitle>
           <p className="text-white/90 mt-2">
-            Write a sentence describing what you see in the image.
+            Write a sentence describing what you see in the image. You need to write at least 10 words before submitting your answer.
           </p>
         </CardHeader>
 
@@ -654,7 +702,7 @@ export default function ImageDescriptionQuiz({
                   setUserDescription(newValue);
                 }
               }}
-              placeholder="Describe what you see in the image. Be specific and detailed..."
+              placeholder="Describe what you see in the image. Be specific and detailed. Remember to write at least 10 words..."
               className={`min-h-[120px] resize-none ${isOverLimit ? 'border-red-500' : ''}`}
               disabled={isSubmitting}
             />
