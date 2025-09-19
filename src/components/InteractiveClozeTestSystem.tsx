@@ -317,26 +317,14 @@ export default function InteractiveClozeTestSystem() {
         best_streak: isCorrect ? 1 : 0
       });
 
-      // Add session record
+      // Add session record  
       await addSession({
         user_id: '', // Will be filled by the hook
         activity_type: 'cloze',
         score: correct,
         total_questions: total,
-        time_spent: timeSpent,
-        difficulty_level: selectedLevel,
-        session_data: {
-          cloze_data: {
-            test_id: currentTest.id,
-            test_title: currentTest.title,
-            level: selectedLevel,
-            user_answers: userAnswers,
-            correct_answers: currentTest.answers,
-            score: correct,
-            total: total,
-            percentage: percentage
-          }
-        }
+        time_spent: Math.round(Number(timeSpent) || 0),
+        difficulty_level: Number(selectedLevel) || 1
       });
     } catch (error) {
       console.error("Error updating cloze test progress:", error);

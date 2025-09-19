@@ -298,7 +298,7 @@ const generateFallbackWord = (difficulty: 'easy' | 'medium' | 'hard'): AIWordScr
   };
 
   const words = fallbackWords[difficulty];
-  return words[Math.floor(Math.random() * words.length)];
+  return words[Math.floor(Math.random() * words.length)] as AIWordScrambleQuestion;
 };
 
 // Clear cache (useful for testing or when you want fresh content)

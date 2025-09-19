@@ -109,22 +109,24 @@ export const useAdaptiveDifficulty = (topic: string) => {
 
       if (error) throw error;
 
-      // Log question history if question data is provided
+      // Log session data if question data is provided
       if (questionData) {
         await supabase
-          .from('question_history')
+          .from('activity_sessions')
           .insert({
             user_id: user.id,
-            topic: topic,
-            question_id: questionData.questionId,
-            question_text: questionData.questionText,
-            user_answer: questionData.userAnswer,
-            correct_answer: questionData.correctAnswer,
-            is_correct: isCorrect,
-            response_time: responseTime,
+            activity_type: topic,
+            score: isCorrect ? 1 : 0,
+            total_questions: 1,
+            time_spent: Math.round(responseTime),
             difficulty_level: newDifficulty || 1,
-            hints_used: hintsUsed,
-            ai_generated: questionData.aiGenerated || false
+            session_data: {
+              question_text: questionData.questionText,
+              user_answer: questionData.userAnswer,
+              correct_answer: questionData.correctAnswer,
+              hints_used: hintsUsed,
+              ai_generated: questionData.aiGenerated || false
+            }
           });
       }
 
@@ -214,17 +216,15 @@ Make sure the response is valid JSON and the answer field contains only A, B, C,
 
         // Cache the question for future use
         await supabase
-          .from('ai_question_cache')
+          .from('ai_challenge_cache')
           .upsert({
-            topic: topic,
-            difficulty_level: difficulty,
-            question_text: questionData.question,
+            challenge_type: topic,
+            difficulty,
+            question: questionData.question,
             options: questionData.options,
             correct_answer: questionData.answer,
             explanation: questionData.explanation,
             usage_count: 1
-          }, {
-            onConflict: 'topic,difficulty_level,question_text'
           });
 
         return questionData;
@@ -235,18 +235,20 @@ Make sure the response is valid JSON and the answer field contains only A, B, C,
           // Try to get a cached question as fallback
           try {
             const { data: cachedQuestion } = await supabase
-              .from('ai_question_cache')
+              .from('ai_challenge_cache')
               .select('*')
-              .eq('topic', topic)
-              .eq('difficulty_level', difficulty)
+              .eq('challenge_type', topic)
+              .eq('difficulty', difficulty)
               .order('usage_count', { ascending: false })
               .limit(1)
               .single();
 
             if (cachedQuestion) {
               return {
-                question: cachedQuestion.question_text,
-                options: cachedQuestion.options,
+                question: cachedQuestion.question,
+                options: Array.isArray(cachedQuestion.options) 
+                  ? (cachedQuestion.options as any[]).map(o => String(o))
+                  : [],
                 answer: cachedQuestion.correct_answer,
                 explanation: cachedQuestion.explanation
               };
@@ -268,10 +270,10 @@ Make sure the response is valid JSON and the answer field contains only A, B, C,
   const getCachedQuestion = useCallback(async (difficulty: number): Promise<AIQuestion | null> => {
     try {
       const { data, error } = await supabase
-        .from('ai_question_cache')
+        .from('ai_challenge_cache')
         .select('*')
-        .eq('topic', topic)
-        .eq('difficulty_level', difficulty)
+        .eq('challenge_type', topic)
+        .eq('difficulty', difficulty)
         .order('usage_count', { ascending: false })
         .limit(1)
         .single();
@@ -279,8 +281,10 @@ Make sure the response is valid JSON and the answer field contains only A, B, C,
       if (error || !data) return null;
 
       return {
-        question: data.question_text,
-        options: data.options,
+        question: data.question,
+        options: Array.isArray(data.options) 
+          ? (data.options as any[]).map(o => String(o))
+          : [],
         answer: data.correct_answer,
         explanation: data.explanation
       };

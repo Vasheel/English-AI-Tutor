@@ -424,9 +424,9 @@ export const testAIQuestionGenerator = async () => {
   console.log('🧪 Testing AI Question Generator...');
   
   const testCases = [
-    { difficulty: 1, topic: 'tenses' as const },
-    { difficulty: 2, topic: 'vocabulary' as const },
-    { difficulty: 3, topic: 'grammar' as const }
+    { difficulty: 1 as 1, topic: 'tenses' as const },
+    { difficulty: 2 as 2, topic: 'vocabulary' as const },
+    { difficulty: 3 as 3, topic: 'grammar' as const }
   ];
 
   for (const testCase of testCases) {
