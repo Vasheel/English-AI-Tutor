@@ -8,12 +8,32 @@
       "config": {
         "distDir": "dist"
       }
+    },
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/images.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/grammar.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
+      "src": "/api/images/(.*)",
+      "dest": "/api/images.py"
+    },
+    {
+      "src": "/api/grammar/(.*)",
+      "dest": "/api/grammar.py"
+    },
+    {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "dest": "/api/index.py"
     },
     {
       "src": "/(.*)",
@@ -24,7 +44,11 @@
     "VITE_SUPABASE_URL": "@vite_supabase_url",
     "VITE_SUPABASE_ANON_KEY": "@vite_supabase_anon_key",
     "VITE_SUPABASE_SERVICE_ROLE_KEY": "@vite_supabase_service_role_key",
-    "VITE_OPENAI_API_KEY": "@vite_openai_api_key"
+    "VITE_OPENAI_API_KEY": "@vite_openai_api_key",
+    "SUPABASE_URL": "@vite_supabase_url",
+    "SUPABASE_ANON_KEY": "@vite_supabase_anon_key",
+    "SUPABASE_SERVICE_ROLE_KEY": "@vite_supabase_service_role_key",
+    "OPENAI_API_KEY": "@vite_openai_api_key"
   },
   "headers": [
     {
