@@ -10,6 +10,17 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
+      VITE_OPENAI_API_KEY: ${{ secrets.VITE_OPENAI_API_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,20 +37,48 @@ jobs:
       - name: Run linter
         run: npm run lint
 
+      - name: Validate required secrets
+        run: |
+          echo "Validating required secrets..."
+          if [ -z "${VITE_SUPABASE_URL}" ]; then
+            echo "Error: VITE_SUPABASE_URL secret is not set"
+            exit 1
+          fi
+          if [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
+            echo "Error: VITE_SUPABASE_ANON_KEY secret is not set"
+            exit 1
+          fi
+          if [ -z "${VITE_SUPABASE_SERVICE_ROLE_KEY}" ]; then
+            echo "Warning: VITE_SUPABASE_SERVICE_ROLE_KEY secret is not set - Admin functionality will be limited"
+          fi
+          if [ -z "${VITE_OPENAI_API_KEY}" ]; then
+            echo "Error: VITE_OPENAI_API_KEY secret is not set"
+            exit 1
+          fi
+          echo "All required secrets are present"
+
       - name: Build application
         run: npm run build
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_OPENAI_API_KEY: ${{ secrets.VITE_OPENAI_API_KEY }}
+
+      - name: Validate deployment secrets
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          echo "Validating deployment secrets..."
+          if [ -z "${VERCEL_TOKEN}" ]; then
+            echo "Warning: VERCEL_TOKEN secret is not set - Vercel deployment will be skipped"
+          fi
+          if [ -z "${NETLIFY_AUTH_TOKEN}" ]; then
+            echo "Warning: NETLIFY_AUTH_TOKEN secret is not set - Netlify deployment will be skipped"
+          fi
+          echo "Deployment secret validation complete"
 
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v25
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-token: ${{ env.VERCEL_TOKEN }}
+          vercel-org-id: ${{ env.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ env.VERCEL_PROJECT_ID }}
           working-directory: ./
 
       - name: Deploy to Netlify
@@ -54,5 +93,5 @@ jobs:
           enable-commit-comment: true
           overwrites-pull-request-comment: true
         env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_AUTH_TOKEN: ${{ env.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ env.NETLIFY_SITE_ID }}
