@@ -10,30 +10,14 @@
       }
     },
     {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/images.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/grammar.py",
+      "src": "api/unified.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/images/(.*)",
-      "dest": "/api/images.py"
-    },
-    {
-      "src": "/api/grammar/(.*)",
-      "dest": "/api/grammar.py"
-    },
-    {
       "src": "/api/(.*)",
-      "dest": "/api/index.py"
+      "dest": "/api/unified.py"
     },
     {
       "src": "/(.*)",
