@@ -15,9 +15,9 @@ const SubjectCard = ({ title, icon, color, progress, route }: SubjectCardProps) 
   const navigate = useNavigate();
   
   return (
-    <Card className="overflow-hidden transition-all duration-300 hover:shadow-lg">
+    <Card className="overflow-hidden transition-all duration-300 hover:shadow-lg min-h-[160px] sm:min-h-[180px]">
       <div className={`h-2 ${color}`}></div>
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <div className={`w-12 h-12 rounded-full flex items-center justify-center ${color} bg-opacity-20`}>
             <span className="text-2xl" role="img" aria-label={title}>
@@ -46,7 +46,7 @@ const SubjectCard = ({ title, icon, color, progress, route }: SubjectCardProps) 
             </svg>
           </div>
         </div>
-        <h3 className="text-xl font-bold mb-2">{title}</h3>
+        <h3 className="text-lg sm:text-xl font-bold mb-2">{title}</h3>
         <div className="h-2 bg-gray-100 rounded-full">
           <div
             className={`h-2 rounded-full ${color}`}
@@ -57,7 +57,7 @@ const SubjectCard = ({ title, icon, color, progress, route }: SubjectCardProps) 
       <CardFooter className="p-4 pt-0">
         <Button
           onClick={() => navigate(route)}
-          className="w-full bg-edu-blue hover:bg-blue-400"
+          className="w-full bg-edu-blue hover:bg-blue-400 min-h-[44px] text-sm sm:text-base"
         >
           Continue Learning
         </Button>

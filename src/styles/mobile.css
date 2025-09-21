@@ -1,0 +1,239 @@
+/* Mobile-specific styles for LearnQuest */
+
+/* Touch-friendly button sizes */
+@media (max-width: 768px) {
+  /* Ensure buttons are at least 44px for touch accessibility */
+  button, .btn, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px;
+  }
+  
+  /* Larger touch targets for navigation */
+  .nav-link {
+    padding: 16px;
+    margin: 4px 0;
+  }
+  
+  /* Improve form inputs on mobile */
+  input, textarea, select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 12px;
+    border-radius: 8px;
+  }
+  
+  /* Better spacing for cards */
+  .card {
+    margin: 8px;
+    padding: 16px;
+  }
+  
+  /* Responsive grid adjustments */
+  .grid-cols-1 {
+    gap: 12px;
+  }
+  
+  /* Mobile-friendly modal dialogs */
+  .modal-content {
+    margin: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+  
+  /* Better mobile navigation */
+  .mobile-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+  }
+  
+  /* Touch-friendly progress bars */
+  .progress-bar {
+    height: 8px;
+    border-radius: 4px;
+  }
+  
+  /* Mobile-optimized quiz components */
+  .quiz-question {
+    font-size: 18px;
+    line-height: 1.5;
+    padding: 16px;
+  }
+  
+  .quiz-option {
+    padding: 16px;
+    margin: 8px 0;
+    border-radius: 12px;
+    font-size: 16px;
+  }
+  
+  /* Better mobile charts */
+  .chart-container {
+    height: 300px;
+    padding: 16px;
+  }
+  
+  /* Mobile-friendly tables */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Improve mobile readability */
+  body {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  
+  h1 {
+    font-size: 28px;
+    line-height: 1.3;
+  }
+  
+  h2 {
+    font-size: 24px;
+    line-height: 1.3;
+  }
+  
+  h3 {
+    font-size: 20px;
+    line-height: 1.4;
+  }
+}
+
+/* Tablet-specific styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .container {
+    padding: 0 24px;
+  }
+  
+  .grid-cols-2 {
+    gap: 20px;
+  }
+  
+  .card {
+    padding: 20px;
+  }
+}
+
+/* Large mobile devices */
+@media (max-width: 480px) {
+  .container {
+    padding: 0 16px;
+  }
+  
+  .text-4xl {
+    font-size: 24px;
+  }
+  
+  .text-3xl {
+    font-size: 20px;
+  }
+  
+  .text-2xl {
+    font-size: 18px;
+  }
+  
+  /* Stack elements vertically on very small screens */
+  .flex-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  /* Smaller padding for very small screens */
+  .p-8 {
+    padding: 16px;
+  }
+  
+  .p-6 {
+    padding: 12px;
+  }
+  
+  .py-8 {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
+/* Landscape orientation adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .mobile-nav {
+    height: 60px;
+  }
+  
+  .main-content {
+    padding-top: 60px;
+  }
+  
+  /* Reduce vertical spacing in landscape */
+  .py-8 {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
+/* iOS-specific fixes */
+@supports (-webkit-touch-callout: none) {
+  /* Fix iOS viewport issues */
+  .ios-fix {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Fix iOS input zoom */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Android-specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  /* Fix Android input styling */
+  input, textarea, select {
+    -webkit-appearance: none;
+    border-radius: 8px;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  /* Ensure crisp rendering on high DPI displays */
+  img, svg {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Dark mode support for mobile */
+@media (prefers-color-scheme: dark) {
+  .mobile-nav {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+  
+  .mobile-nav a {
+    color: #f9fafb;
+  }
+  
+  .mobile-nav a:hover {
+    background-color: #374151;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
