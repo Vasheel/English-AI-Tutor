@@ -1,11 +1,59 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from pydantic import BaseModel
 import json
 import random
 import time
 import uuid
+import os
+
+# Initialize rate limiter with Redis backend (fallback to memory)
+try:
+    # Try Redis first for production
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri="redis://localhost:6379",
+        default_limits=["1000/day", "100/hour"]  # Global fallback limits
+    )
+    print("[RATE_LIMIT] Using Redis backend")
+except Exception as e:
+    print(f"[RATE_LIMIT] Redis not available, using memory: {e}")
+    # Fallback to memory storage
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=["1000/day", "100/hour"]
+    )
 
 app = FastAPI()
+
+# Add rate limiting middleware
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# Custom rate limit exceeded handler with educational context
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """
+    Custom handler for rate limit exceeded with educational context
+    """
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "error": "Rate limit exceeded",
+            "message": "You've reached your daily learning limit! Take a break and come back tomorrow to continue your English learning journey. 📚✨",
+            "retry_after": exc.retry_after,
+            "limit_type": "daily_quota",
+            "educational_tip": "Learning is most effective with regular breaks. Try again tomorrow!",
+            "suggestion": "Practice offline with the exercises you've already completed."
+        }
+    )
+    response.headers["Retry-After"] = str(exc.retry_after)
+    return response
 
 # Models
 class GrammarRequest(BaseModel):
@@ -80,21 +128,23 @@ IMAGES = [
 # Routes
 @app.get("/")
 def root():
-    return {"message": "English AI Tutor API", "status": "running"}
+    return {"message": "English AI Tutor API", "status": "running", "rate_limits": "enabled"}
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "message": "API is working"}
+    return {"status": "ok", "message": "API is working", "rate_limits": "active"}
 
-# Image API endpoints
+# Image API endpoints - Higher limits for static content
 @app.get("/api/images/list")
-def list_images(level: str = None):
+@limiter.limit("200/day; 50/hour; 10/minute")  # Daily quota with burst allowance
+def list_images(request: Request, level: str = None):
     if level:
         return [i for i in IMAGES if i["level"] == level]
     return IMAGES
 
 @app.get("/api/images/next")
-def get_next_image(current_id: str, level: str):
+@limiter.limit("200/day; 50/hour; 10/minute")
+def get_next_image(request: Request, current_id: str, level: str):
     """Get the next image in sequence for the given level"""
     level_images = [i for i in IMAGES if i["level"] == level]
     
@@ -122,15 +172,19 @@ def get_next_image(current_id: str, level: str):
         "will_wrap": next_index == 0
     }
 
-# Grammar API endpoints
+# Grammar API endpoints - Moderate limits for AI processing
 @app.post("/api/grammar/evaluate")
-async def evaluate_grammar(request: GrammarRequest):
+@limiter.limit("100/day; 20/hour; 5/minute")  # Daily quota with burst allowance
+async def evaluate_grammar(request: Request, grammar_request: GrammarRequest):
     """
-    Simple grammar evaluation endpoint for image quiz
+    Grammar evaluation with rate limiting
+    Daily quota: 100 evaluations per day
+    Hourly quota: 20 evaluations per hour  
+    Burst allowance: 5 evaluations per minute
     """
     try:
         # Basic grammar check (simplified)
-        text = request.text.strip()
+        text = grammar_request.text.strip()
         
         # Simple scoring based on word count and basic checks
         word_count = len(text.split())
@@ -176,11 +230,15 @@ async def evaluate_grammar(request: GrammarRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
 
-# Quiz API endpoints
+# Quiz API endpoints - Lower limits for AI generation (more expensive)
 @app.post("/api/quizzes/generate")
-async def generate_quiz(payload: GenerateQuizPayload):
+@limiter.limit("50/day; 10/hour; 2/minute")  # Daily quota with burst allowance
+async def generate_quiz(request: Request, payload: GenerateQuizPayload):
     """
-    Generate quiz questions for PSAC Grade 6 English students
+    Quiz generation with rate limiting
+    Daily quota: 50 quizzes per day
+    Hourly quota: 10 quizzes per hour
+    Burst allowance: 2 quizzes per minute
     """
     try:
         count = payload.count or 6
@@ -198,7 +256,8 @@ async def generate_quiz(payload: GenerateQuizPayload):
             metadata={
                 "timestamp": int(time.time()),
                 "session": uuid.uuid4().hex[:8],
-                "difficulty": payload.difficulty or "beginner"
+                "difficulty": payload.difficulty or "beginner",
+                "rate_limit_info": "Daily quota: 50 quizzes, Hourly quota: 10 quizzes"
             }
         )
         
@@ -382,6 +441,22 @@ def create_fallback_questions(count: int) -> list[QuizItem]:
         questions.extend(questions[:count-len(questions)])
     
     return questions[:count]
+
+# Rate limit status endpoint
+@app.get("/api/rate-limit/status")
+@limiter.limit("10/day")  # Very low limit for status checks
+def get_rate_limit_status(request: Request):
+    """Get current rate limit status for the user"""
+    return {
+        "message": "Rate limiting is active",
+        "limits": {
+            "grammar_evaluation": "100/day; 20/hour; 5/minute",
+            "quiz_generation": "50/day; 10/hour; 2/minute", 
+            "image_requests": "200/day; 50/hour; 10/minute",
+            "status_checks": "10/day"
+        },
+        "educational_note": "These limits ensure fair usage and encourage regular learning breaks! 📚"
+    }
 
 # Export for Vercel
 handler = app

@@ -1,0 +1,258 @@
+{
+  "info": {
+    "name": "English AI Tutor - Rate Limiting Tests",
+    "description": "Postman collection to test T7 - Security (Rate Limiting) functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Phase 1: Successful Requests (200 OK)",
+      "item": [
+        {
+          "name": "Grammar Evaluation - Request 1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 1 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        },
+        {
+          "name": "Grammar Evaluation - Request 2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 2 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        },
+        {
+          "name": "Grammar Evaluation - Request 3",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 3 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        },
+        {
+          "name": "Grammar Evaluation - Request 4",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 4 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        },
+        {
+          "name": "Grammar Evaluation - Request 5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 5 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phase 2: Rate Limit Exceeded (429 Too Many Requests)",
+      "item": [
+        {
+          "name": "Grammar Evaluation - Request 6 (Rate Limited)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 6 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        },
+        {
+          "name": "Grammar Evaluation - Request 7 (Rate Limited)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 7 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        },
+        {
+          "name": "Grammar Evaluation - Request 8 (Rate Limited)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"This is test request 8 for grammar evaluation.\",\n  \"mode\": \"minimal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/grammar/evaluate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "grammar", "evaluate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phase 3: Different Endpoints, Different Limits",
+      "item": [
+        {
+          "name": "Health Check (Higher Limits)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            }
+          }
+        },
+        {
+          "name": "Images List (Moderate Limits)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/images/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "images", "list"]
+            }
+          }
+        },
+        {
+          "name": "Quiz Generation (Lowest Limits)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"count\": 3,\n  \"skills\": [\"grammar\", \"vocabulary\"],\n  \"query\": \"Test quiz for rate limiting\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/quizzes/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "quizzes", "generate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phase 4: Rate Limit Status",
+      "item": [
+        {
+          "name": "Get Rate Limit Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/rate-limit/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "rate-limit", "status"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://your-vercel-app.vercel.app",
+      "description": "Replace with your actual Vercel URL"
+    }
+  ]
+}

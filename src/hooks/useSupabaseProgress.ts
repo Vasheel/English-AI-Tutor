@@ -91,6 +91,66 @@ export const useSupabaseProgress = () => {
     }
   }, [user]);
 
+  const resetAllProgress = useCallback(async () => {
+    if (!user) {
+      console.warn('No user found for resetting progress');
+      toast.error('No user found. Please log in and try again.');
+      return false;
+    }
+
+    try {
+      console.log('🔄 Starting progress reset for user:', user.id);
+      
+      // Show immediate feedback
+      toast.info('Resetting progress... Please wait.');
+      
+      // Run all delete operations in parallel for better performance
+      const [progressResult, badgesResult, sessionsResult, studentProgressResult] = await Promise.all([
+        supabase.from('user_progress').delete().eq('user_id', user.id),
+        supabase.from('user_badges').delete().eq('user_id', user.id),
+        supabase.from('activity_sessions').delete().eq('user_id', user.id),
+        supabase.from('student_progress').delete().eq('user_id', user.id)
+      ]);
+
+      // Check for errors
+      if (progressResult.error) throw progressResult.error;
+      if (badgesResult.error) throw badgesResult.error;
+      if (sessionsResult.error) throw sessionsResult.error;
+      if (studentProgressResult.error) throw studentProgressResult.error;
+
+      // Delete all question history
+      const { error: questionHistoryError } = await supabase
+        .from('question_history')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (questionHistoryError) throw questionHistoryError;
+
+      console.log('✅ All progress data reset successfully');
+      
+      // Refresh the progress data
+      await fetchProgress();
+      await fetchUserBadges();
+      
+      toast.success('All progress has been reset successfully! 🎉');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Error resetting progress:', error);
+      
+      // More detailed error logging
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      } else {
+        console.error('Error object:', JSON.stringify(error, null, 2));
+      }
+      
+      toast.error('Failed to reset progress. Please try again.');
+      return false;
+    }
+  }, [user, fetchProgress, fetchUserBadges]);
+
   useEffect(() => {
     if (user) {
       fetchProgress();
@@ -427,6 +487,7 @@ export const useSupabaseProgress = () => {
     getProgressByType,
     fetchProgress,
     resetProgress,
+    resetAllProgress,
     getProgressStats
   };
 };

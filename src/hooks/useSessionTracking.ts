@@ -31,6 +31,8 @@ export const useSessionTracking = () => {
   const [totalTimeToday, setTotalTimeToday] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [liveCurrentTime, setLiveCurrentTime] = useState(0);
+  const [liveTotalTime, setLiveTotalTime] = useState(0);
   
   const sessionStartTime = useRef<number>(Date.now());
   const lastActivityTime = useRef<number>(Date.now());
@@ -225,6 +227,54 @@ export const useSessionTracking = () => {
     }
   }, []);
 
+  // Update live time every second
+  useEffect(() => {
+    if (!isActive || !currentSession) {
+      setLiveCurrentTime(0);
+      return;
+    }
+
+    const updateLiveTime = () => {
+      if (!isActive || !currentSession) {
+        setLiveCurrentTime(0);
+        setLiveTotalTime(totalTimeToday);
+        return;
+      }
+
+      const currentTime = Math.floor((Date.now() - sessionStartTime.current) / 1000);
+      const totalSessionTime = currentSession.total_time_spent + currentTime;
+      
+      // For total time today: completed sessions + current session saved time + live time
+      const liveTotalToday = totalTimeToday + currentSession.total_time_spent + currentTime;
+      
+      setLiveCurrentTime(totalSessionTime);
+      setLiveTotalTime(liveTotalToday);
+      
+      // Debug logging
+      console.log('🕐 Live time update:', {
+        currentTime,
+        totalSessionTime,
+        liveTotalToday,
+        totalTimeToday,
+        currentSessionTime: currentSession.total_time_spent,
+        isActive,
+        sessionStartTime: sessionStartTime.current
+      });
+    };
+
+    // Update immediately
+    updateLiveTime();
+
+    // Set up interval for real-time updates
+    intervalRef.current = setInterval(updateLiveTime, 1000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isActive, currentSession, totalTimeToday]);
+
   // Initialize session tracking
   useEffect(() => {
     if (!user) {
@@ -372,6 +422,8 @@ export const useSessionTracking = () => {
   return {
     currentSession,
     totalTimeToday,
+    liveCurrentTime,
+    liveTotalTime,
     isActive,
     loading,
     startSession,

@@ -56,6 +56,15 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   const [draggedWord, setDraggedWord] = useState<Word | null>(null);
   const [attempts, setAttempts] = useState(0);
   const [lastTranscript, setLastTranscript] = useState<string>("");
+  const [userAnswer, setUserAnswer] = useState<string>("");
+  const [showAnswerField, setShowAnswerField] = useState<boolean>(false);
+  const [isAutoPlacing, setIsAutoPlacing] = useState<boolean>(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
+  const [feedbackData, setFeedbackData] = useState<{
+    isCorrect: boolean;
+    accuracy: number;
+    message: string;
+  } | null>(null);
   const [score, setScore] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -131,6 +140,7 @@ const SentenceBuilderWithWhisper: React.FC = () => {
   const { isListening, isSupported, startListening: origStartListening, stopListening } = useWhisperVoiceRecognition({
     onResult: (transcript) => {
       console.log('Whisper transcript:', transcript);
+      setUserAnswer(transcript); // Populate the answer field
       processVoiceInput(transcript);
     },
     onError: (error) => {
@@ -150,9 +160,88 @@ const SentenceBuilderWithWhisper: React.FC = () => {
     listeningSentenceRef.current = currentSentenceRef.current;
     origStartListening();
   };
+  // Function to automatically populate sentence slots from spoken words
+  const populateSlotsFromTranscript = (transcript: string) => {
+    if (!currentSentence) {
+      setIsAutoPlacing(false);
+      return;
+    }
+    
+    try {
+      setIsAutoPlacing(true);
+      
+      // Clean the transcript and split into words
+      const spokenWords = transcript.toLowerCase().trim().split(/\s+/);
+      const correctWords = currentSentence.words.map(word => word.toLowerCase());
+      
+      // Create new slots array
+      const newSlots: (Word | null)[] = new Array(currentSentence.words.length).fill(null);
+      const usedWordIds = new Set<string>();
+      
+      // Improved algorithm: try to place ALL words from spoken input
+      spokenWords.forEach((spokenWord) => {
+        // Find all positions where this word should go
+        const correctIndices = correctWords
+          .map((correctWord, idx) => correctWord === spokenWord ? idx : -1)
+          .filter(idx => idx !== -1 && newSlots[idx] === null);
+        
+        // For each correct position, try to place the word
+        correctIndices.forEach(correctIdx => {
+          const wordObj = availableWords.find(word => 
+            word.text.toLowerCase() === spokenWord && 
+            !usedWordIds.has(word.id)
+          );
+          
+          if (wordObj) {
+            newSlots[correctIdx] = wordObj;
+            usedWordIds.add(wordObj.id);
+          }
+        });
+      });
+      
+      setSentenceSlots(newSlots);
+      
+      // Remove used words from available words
+      const remainingWords = availableWords.filter(word => 
+        !usedWordIds.has(word.id)
+      );
+      setAvailableWords(remainingWords);
+      
+      // Show feedback and reset animation
+      const placedWords = newSlots.filter(slot => slot !== null).length;
+      console.log('Debug - Spoken words:', spokenWords);
+      console.log('Debug - Correct words:', correctWords);
+      console.log('Debug - Placed words:', placedWords);
+      console.log('Debug - New slots:', newSlots.map(slot => slot?.text || 'null'));
+      
+      if (placedWords > 0) {
+        toast({
+          title: "🎯 Words Placed!",
+          description: `Automatically placed ${placedWords} word${placedWords > 1 ? 's' : ''} in the sentence.`,
+        });
+      }
+      
+    } catch (error) {
+      console.error("Error in populateSlotsFromTranscript:", error);
+      toast({
+        title: "Error",
+        description: "Failed to auto-place words. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      // Always reset animation after a short delay
+      setTimeout(() => {
+        setIsAutoPlacing(false);
+      }, 1000);
+    }
+  };
+
   // Use the ref in processVoiceInput
   const processVoiceInput = async (transcript: string) => {
     setLastTranscript(transcript);
+    
+    // Automatically populate the sentence slots with spoken words
+    populateSlotsFromTranscript(transcript);
     
     const timeToComplete = (Date.now() - attemptStartTime) / 1000; // Convert to seconds
     const { accuracy, isCorrect } = recordAttempt(transcript, timeToComplete);
@@ -187,21 +276,35 @@ const SentenceBuilderWithWhisper: React.FC = () => {
     
     if (isCorrect) {
       playSound('correct');
-      toast({
-        title: "Perfect! 🎉",
-        description: `${accuracy}% accuracy! ${getDifficultyMessage()}`,
-      });
       
+      // Show prominent feedback modal
+      setFeedbackData({
+        isCorrect: true,
+        accuracy: accuracy,
+        message: `${accuracy}% accuracy! ${getDifficultyMessage()}`
+      });
+      setShowFeedbackModal(true);
+      
+      // Hide modal and go to next sentence after 3 seconds
       setTimeout(() => {
+        setShowFeedbackModal(false);
         nextSentence();
-      }, 2000);
+      }, 3000);
     } else {
       playSound('incorrect');
-      toast({
-        title: `${accuracy}% Match`,
-        description: `You said: "${transcript}". Try again!`,
-        variant: "destructive"
+      
+      // Show prominent feedback modal for incorrect answer
+      setFeedbackData({
+        isCorrect: false,
+        accuracy: accuracy,
+        message: `${accuracy}% Match - Try again!`
       });
+      setShowFeedbackModal(true);
+      
+      // Hide modal after 2 seconds
+      setTimeout(() => {
+        setShowFeedbackModal(false);
+      }, 2000);
     }
   };
 
@@ -232,6 +335,7 @@ const SentenceBuilderWithWhisper: React.FC = () => {
     setIsComplete(false);
     setShowHint(false);
     setLastTranscript("");
+    setUserAnswer("");
   }, [currentSentence]);
 
   // Initialize the current sentence
@@ -288,6 +392,11 @@ const SentenceBuilderWithWhisper: React.FC = () => {
     }
 
     if (destination.droppableId === source.droppableId && destination.index === source.index) {
+      return;
+    }
+
+    // Skip if trying to drag an empty slot
+    if (draggableId.startsWith('empty-')) {
       return;
     }
 
@@ -608,6 +717,58 @@ const SentenceBuilderWithWhisper: React.FC = () => {
               <p className="text-gray-900">"{lastTranscript}"</p>
             </div>
           )}
+
+          {/* Answer Input Field */}
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-green-800">Type or Speak Your Answer</h4>
+              <Button
+                onClick={() => setShowAnswerField(!showAnswerField)}
+                variant="outline"
+                size="sm"
+                className="text-green-700 border-green-300 hover:bg-green-100"
+              >
+                {showAnswerField ? 'Hide' : 'Show'} Answer Field
+              </Button>
+            </div>
+            
+            {showAnswerField && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={userAnswer}
+                    onChange={(e) => setUserAnswer(e.target.value)}
+                    placeholder="Type your answer here or use voice recognition..."
+                    className="flex-1 p-3 border border-green-300 rounded-lg text-lg focus:ring-2 focus:ring-green-400 focus:border-transparent"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && userAnswer.trim()) {
+                        // First populate the slots, then process the input
+                        populateSlotsFromTranscript(userAnswer);
+                        processVoiceInput(userAnswer);
+                      }
+                    }}
+                  />
+                  <Button
+                    onClick={() => {
+                      if (userAnswer.trim()) {
+                        // First populate the slots, then process the input
+                        populateSlotsFromTranscript(userAnswer);
+                        processVoiceInput(userAnswer);
+                      }
+                    }}
+                    disabled={!userAnswer.trim()}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-green-600">
+                  💡 Tip: You can type your answer or use the microphone to speak it!
+                </p>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -659,35 +820,50 @@ const SentenceBuilderWithWhisper: React.FC = () => {
           <CardContent className="space-y-6">
             {/* Sentence Slots */}
             <div>
-              <h3 className="text-sm font-medium mb-3">Drag words here to build the sentence:</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium">Drag words here to build the sentence:</h3>
+                {isAutoPlacing && (
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-sm font-medium">Auto-placing words...</span>
+                  </div>
+                )}
+              </div>
               <Droppable droppableId="sentence-slots" direction="horizontal">
                 {(provided) => (
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="flex gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg min-h-[60px] items-center"
+                    className={`flex gap-2 p-4 border-2 border-dashed rounded-lg min-h-[60px] items-center flex-wrap transition-all duration-500 ${
+                      isAutoPlacing 
+                        ? 'border-blue-400 bg-blue-50' 
+                        : 'border-gray-300'
+                    }`}
                   >
                     {sentenceSlots.map((slot, index) => (
-                      <div key={index} className="flex items-center">
-                        {slot ? (
-                          <Draggable draggableId={slot.id} index={index}>
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={`px-3 py-2 bg-blue-100 border border-blue-300 rounded-lg font-medium cursor-move ${
-                                  snapshot.isDragging ? 'shadow-lg' : ''
-                                }`}
-                              >
-                                {slot.text}
-                              </div>
-                            )}
-                          </Draggable>
-                        ) : (
-                          <div className="w-20 h-10 border-2 border-gray-200 rounded-lg bg-gray-50" />
+                      <Draggable 
+                        key={slot ? slot.id : `empty-${index}`} 
+                        draggableId={slot ? slot.id : `empty-${index}`} 
+                        index={index}
+                        isDragDisabled={!slot}
+                      >
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`flex items-center ${
+                              slot 
+                                ? `px-3 py-2 bg-blue-100 border border-blue-300 rounded-lg font-medium cursor-move ${
+                                    snapshot.isDragging ? 'shadow-lg' : ''
+                                  }`
+                                : 'w-20 h-10 border-2 border-gray-200 rounded-lg bg-gray-50'
+                            }`}
+                          >
+                            {slot ? slot.text : ''}
+                          </div>
                         )}
-                      </div>
+                      </Draggable>
                     ))}
                     {provided.placeholder}
                   </div>
@@ -745,6 +921,38 @@ const SentenceBuilderWithWhisper: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Prominent Feedback Modal */}
+      {showFeedbackModal && feedbackData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`p-8 rounded-2xl shadow-2xl max-w-md mx-4 transform transition-all duration-300 ${
+            feedbackData.isCorrect 
+              ? 'bg-green-100 border-4 border-green-400' 
+              : 'bg-red-100 border-4 border-red-400'
+          }`}>
+            <div className="text-center">
+              <div className="text-6xl mb-4">
+                {feedbackData.isCorrect ? '🎉' : '❌'}
+              </div>
+              <h2 className={`text-3xl font-bold mb-4 ${
+                feedbackData.isCorrect ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {feedbackData.isCorrect ? 'Perfect!' : 'Try Again!'}
+              </h2>
+              <p className={`text-xl mb-6 ${
+                feedbackData.isCorrect ? 'text-green-700' : 'text-red-700'
+              }`}>
+                {feedbackData.message}
+              </p>
+              <div className={`text-4xl font-bold ${
+                feedbackData.isCorrect ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {feedbackData.accuracy}%
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

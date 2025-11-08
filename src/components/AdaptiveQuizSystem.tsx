@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Trophy, TrendingUp, TrendingDown, Target, Brain, Clock, CheckCircle, XCircle, Home, ArrowLeft } from 'lucide-react';
 import { generateQuiz, BackendQuizResponse } from '@/lib/api';
 import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
+import { useAdaptiveDifficulty } from '@/hooks/useAdaptiveDifficulty';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -68,6 +69,11 @@ const DIFFICULTY_LEVELS = {
 export default function AdaptiveQuizSystem() {
   const { toast } = useToast();
   const { updateProgress, addSession } = useSupabaseProgress();
+  const { 
+    currentProgress, 
+    updateStudentProgress, 
+    getElapsedTime 
+  } = useAdaptiveDifficulty('smart_quiz');
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
   
@@ -79,7 +85,7 @@ export default function AdaptiveQuizSystem() {
   const [showResults, setShowResults] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Performance tracking
+  // Performance tracking - now handled by adaptive difficulty hook
   const [currentDifficulty, setCurrentDifficulty] = useState(2); // Start at medium
   const [performance, setPerformance] = useState({
     accuracy: 0,
@@ -108,38 +114,26 @@ export default function AdaptiveQuizSystem() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserId(user.id);
-        await loadUserProgress(user.id);
       }
     };
     getUser();
   }, []);
 
-  // Load user's adaptive difficulty progress
-  const loadUserProgress = async (uid: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('student_progress' as never)
-        .select('*')
-        .eq('user_id', uid)
-        .eq('topic', 'adaptive_quiz')
-        .single();
-
-      if (data && !error) {
-        const progressData = data as StudentProgress;
-        setCurrentDifficulty(progressData.current_difficulty || 2);
-        setPerformance({
-          accuracy: parseFloat(progressData.accuracy || '0'),
-          avgResponseTime: parseFloat(progressData.avg_response_time || '0'),
-          totalQuestions: progressData.total_questions || 0,
-          correctAnswers: progressData.correct_answers || 0,
-          streak: 0,
-          bestStreak: 0
-        });
-      }
-    } catch (error) {
-      console.log('No existing progress, starting fresh');
+  // Load user's adaptive difficulty progress from the hook
+  useEffect(() => {
+    if (currentProgress) {
+      setCurrentDifficulty(currentProgress.current_difficulty || 2);
+      setPerformance({
+        accuracy: currentProgress.accuracy || 0,
+        avgResponseTime: currentProgress.avg_response_time || 0,
+        totalQuestions: currentProgress.total_questions || 0,
+        correctAnswers: currentProgress.correct_answers || 0,
+        streak: 0, // This will be calculated by the adaptive difficulty system
+        bestStreak: 0
+      });
+      console.log('📊 Loaded adaptive difficulty progress:', currentProgress);
     }
-  };
+  }, [currentProgress]);
 
   // Generate a random quiz with current difficulty
   // Generate a random quiz with current difficulty
@@ -317,78 +311,83 @@ const generateRandomQuiz = async () => {
 
 
 
-    // Adaptive difficulty adjustment with progressive changes
-    let newDifficulty = currentDifficulty;
+    // Show performance feedback (difficulty adjustment is now handled by adaptive difficulty system)
     const threshold = DIFFICULTY_LEVELS[currentDifficulty].threshold;
-
-    // Track consecutive successes/failures for progressive difficulty
-    let newStreak = performance.streak;
-    if (accuracy >= threshold.up) {
-      newStreak = performance.streak + 1;
-    } else if (accuracy < threshold.down) {
-      newStreak = -1; // Reset to negative for failure
-    } else {
-      newStreak = 0; // Reset if performance is average
-    }
-
-    // Level changes based on consistent performance
+    
     if (accuracy >= threshold.up && avgTime < 20) {
-      if (currentDifficulty < 3 && newStreak >= 2) {
-        // Need 2 consecutive good performances to level up
-        newDifficulty = currentDifficulty + 1;
-        newStreak = 0; // Reset streak after level change
-        toast({
-          title: "Level Up! 🎉",
-          description: `Excellent work! Moving to ${DIFFICULTY_LEVELS[newDifficulty].name} difficulty`,
-        });
-      } else if (currentDifficulty === 3 && newStreak > 0) {
-        // At max level, acknowledge continued excellence
-        toast({
-          title: "Outstanding! 🌟",
-          description: `You're mastering the hardest level! Streak: ${newStreak}`,
-        });
-      }
+      toast({
+        title: "Excellent Work! 🌟",
+        description: `Great performance! Keep up the good work!`,
+      });
     } else if (accuracy < threshold.down) {
-      if (currentDifficulty > 1) {
-        newDifficulty = currentDifficulty - 1;
-        newStreak = 0;
-        toast({
-          title: "Difficulty Adjusted",
-          description: `Let's practice more at ${DIFFICULTY_LEVELS[newDifficulty].name} level`,
-        });
-      }
+      toast({
+        title: "Keep Practicing! 💪",
+        description: `Don't worry, practice makes perfect!`,
+      });
     } else if (accuracy >= 60 && accuracy < threshold.up) {
-      // Good but not great performance
       toast({
         title: "Good Job! 👍",
-        description: `Keep practicing to level up! Need ${threshold.up}% to advance.`,
+        description: `You're doing well! Keep practicing to improve further.`,
       });
     }
 
-    // Update performance with new streak
+    // Update local performance state for display (actual difficulty is managed by adaptive system)
     const newPerformance = {
       accuracy: ((performance.accuracy * performance.totalQuestions + accuracy) / (performance.totalQuestions + currentQuiz.items.length)),
       avgResponseTime: ((performance.avgResponseTime * performance.totalQuestions + avgTime * currentQuiz.items.length) / (performance.totalQuestions + currentQuiz.items.length)),
       totalQuestions: performance.totalQuestions + currentQuiz.items.length,
       correctAnswers: performance.correctAnswers + correct,
-      streak: newStreak,
-      bestStreak: Math.max(performance.bestStreak, Math.abs(newStreak))
+      streak: 0, // Streak is now managed by adaptive difficulty system
+      bestStreak: performance.bestStreak
     };
 
-    setCurrentDifficulty(newDifficulty);
     setPerformance(newPerformance);
 
-    // Save progress to database
+    // Save progress using adaptive difficulty system
     try {
       const timeSpentSeconds = Math.max(1, Math.floor((Date.now() - quizSessionStartTime) / 1000));
-      const isCorrect = accuracy >= 60; // 60% threshold for "correct"
+      
+      // Update progress for each question using the adaptive difficulty system
+      // This tracks individual question performance for adaptive difficulty
+      for (let i = 0; i < currentQuiz.items.length; i++) {
+        const item = currentQuiz.items[i];
+        const userAnswer = answers[i];
+        const responseTime = times[i];
+        
+        let isCorrect = false;
+        if (item.type === 'mcq' && item.options) {
+          if (typeof item.answer === 'number') {
+            isCorrect = userAnswer === item.options[item.answer];
+          } else {
+            const answerStr = Array.isArray(item.answer) ? item.answer.join(',') : String(item.answer);
+            isCorrect = userAnswer.toLowerCase() === answerStr.toLowerCase();
+          }
+        } else if (item.type === 'fitb') {
+          const answerStr = Array.isArray(item.answer) ? item.answer.join(',') : String(item.answer);
+          isCorrect = userAnswer.toLowerCase() === answerStr.toLowerCase();
+        }
 
+        // Update student progress for this question (for adaptive difficulty)
+        await updateStudentProgress(
+          isCorrect,
+          responseTime,
+          0, // hints used
+          {
+            questionText: item.question,
+            userAnswer: userAnswer,
+            correctAnswer: Array.isArray(item.answer) ? item.answer.join(',') : String(item.answer),
+            aiGenerated: true
+          }
+        );
+      }
+
+      // Save to general progress tracking (1 quiz session = 1 attempt)
       await updateProgress("smart_quiz", {
-        total_attempts: 1,
-        correct_answers: isCorrect ? 1 : 0,
+        total_attempts: 1, // Each complete quiz session counts as 1 attempt
+        correct_answers: correct, // Total correct questions in this session
         total_time_spent: timeSpentSeconds,
-        current_streak: isCorrect ? 1 : 0,
-        best_streak: isCorrect ? 1 : 0
+        current_streak: accuracy >= 60 ? 1 : 0,
+        best_streak: accuracy >= 60 ? 1 : 0
       });
 
       await addSession({
@@ -409,7 +408,7 @@ const generateRandomQuiz = async () => {
         }
       });
 
-      console.log('✅ Smart Quiz progress saved:', { accuracy, correct, timeSpentSeconds });
+      console.log('✅ Smart Quiz progress saved with adaptive difficulty:', { accuracy, correct, timeSpentSeconds, currentDifficulty });
     } catch (error) {
       console.error('❌ Failed to save Smart Quiz progress:', error);
     }

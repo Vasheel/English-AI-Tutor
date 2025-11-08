@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { RefreshCw, Trash2, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ProgressData {
   activity_type: string;
@@ -79,22 +81,63 @@ const SupabaseProgressDashboard: React.FC = () => {
       
       if (!user) {
         console.error('No user found');
-        return;
+        return false;
       }
 
-      const { error: resetError } = await supabase
+      console.log('🔄 Starting comprehensive progress reset for user:', user.id);
+      
+      // Delete all user progress
+      const { error: progressError } = await supabase
         .from('user_progress')
         .delete()
         .eq('user_id', user.id);
 
-      if (resetError) {
-        console.error('Error resetting all progress:', resetError);
-      } else {
-        console.log('✅ Reset all progress');
-        await fetchProgress();
-      }
+      if (progressError) throw progressError;
+
+      // Delete all user badges
+      const { error: badgesError } = await supabase
+        .from('user_badges')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (badgesError) throw badgesError;
+
+      // Delete all activity sessions
+      const { error: sessionsError } = await supabase
+        .from('activity_sessions')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (sessionsError) throw sessionsError;
+
+      // Delete all student progress (for adaptive difficulty)
+      const { error: studentProgressError } = await supabase
+        .from('student_progress')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (studentProgressError) throw studentProgressError;
+
+      // Delete all question history
+      const { error: questionHistoryError } = await supabase
+        .from('question_history')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (questionHistoryError) throw questionHistoryError;
+
+      console.log('✅ All progress data reset successfully');
+      
+      // Refresh the progress data
+      await fetchProgress();
+      
+      toast.success('All progress has been reset successfully! 🎉');
+      return true;
+      
     } catch (error) {
-      console.error('Error in resetAllProgress:', error);
+      console.error('❌ Error resetting progress:', error);
+      toast.error('Failed to reset progress. Please try again.');
+      return false;
     }
   };
 
@@ -229,10 +272,55 @@ const SupabaseProgressDashboard: React.FC = () => {
               Your Learning Dashboard
             </CardTitle>
           </div>
-          <Button onClick={handleRefresh} size="sm" variant="outline">
-            <RefreshCw className="w-4 h-4 mr-1" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  disabled={isLoading}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Reset All
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset All Progress</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to reset all your progress? This action will permanently delete:
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>All activity progress and statistics</li>
+                      <li>All earned badges and achievements</li>
+                      <li>All session history and time tracking</li>
+                      <li>All adaptive difficulty progress</li>
+                      <li>All question history</li>
+                    </ul>
+                    <strong className="text-red-600">This action cannot be undone!</strong>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      const success = await resetAllProgress();
+                      if (success) {
+                        // Refresh the dashboard
+                        window.location.reload();
+                      }
+                    }}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Yes, Reset Everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button onClick={handleRefresh} size="sm" variant="outline">
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Refresh
+            </Button>
+          </div>
         </div>
         <p className="text-sm text-gray-600 mt-1">
           Track your progress and celebrate your achievements!
@@ -292,9 +380,19 @@ const SupabaseProgressDashboard: React.FC = () => {
         {/* Individual Activity Progress */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {completeActivityList.map((activity) => {
-            const accuracy = activity.total_attempts > 0 
-              ? Math.round((activity.correct_answers / activity.total_attempts) * 100)
-              : 0;
+            // Special accuracy calculation for smart quiz
+            let accuracy = 0;
+            if (activity.activity_type === 'smart_quiz') {
+              // For smart quiz: attempts = quiz sessions, correct = total correct questions
+              const questionsPerQuiz = 5; // Assuming 5 questions per quiz
+              const totalQuestions = activity.total_attempts * questionsPerQuiz;
+              accuracy = totalQuestions > 0 ? Math.round((activity.correct_answers / totalQuestions) * 100) : 0;
+            } else {
+              // Default calculation for other activities
+              accuracy = activity.total_attempts > 0 
+                ? Math.round((activity.correct_answers / activity.total_attempts) * 100)
+                : 0;
+            }
             
             const timeDisplay = formatTime(activity.total_time_spent || 0);
 

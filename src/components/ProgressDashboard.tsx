@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Clock, Play, Pause, RotateCcw, TrendingUp, Target, Award } from 'lucide-react';
-import { useSessionTracking } from '@/hooks/useSessionTracking';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { TrendingUp, Target, Award, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseProgress } from '@/hooks/useSupabaseProgress';
 import { supabase } from '@/integrations/supabase/client';
+import LiveTimeTracker from '@/components/LiveTimeTracker';
 
 interface ActivityProgress {
   activity_type: string;
@@ -21,15 +22,22 @@ interface ActivityProgress {
 
 const ProgressDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { 
-    currentSession, 
-    totalTimeToday, 
-    isActive, 
-    formatTime,
-    trackActivitySession
-  } = useSessionTracking();
-  
-  const { progress: activityProgress, loading, fetchProgress } = useSupabaseProgress();
+  const { progress: activityProgress, loading, fetchProgress, resetAllProgress } = useSupabaseProgress();
+
+  // Format time helper function
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${secs}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
+  };
 
       // Define all expected activities
       const allActivities = [
@@ -63,9 +71,42 @@ const ProgressDashboard: React.FC = () => {
   // Fetch user's activity progress - now handled by useSupabaseProgress hook
   const fetchActivityProgress = fetchProgress;
 
-  const getAccuracyPercentage = (attempts: number, correct: number): number => {
+  const getAccuracyPercentage = (attempts: number, correct: number, activityType?: string): number => {
     if (attempts === 0) return 0;
+    
+    // Special handling for smart quiz
+    if (activityType === 'smart_quiz') {
+      // For smart quiz: attempts = quiz sessions, correct = total correct questions
+      // Each quiz typically has 5 questions, so accuracy = correct / (attempts * 5)
+      const questionsPerQuiz = 5; // Assuming 5 questions per quiz
+      const totalQuestions = attempts * questionsPerQuiz;
+      return totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0;
+    }
+    
+    // Default calculation for other activities
     return Math.round((correct / attempts) * 100);
+  };
+
+  // Calculate overall accuracy across all activities
+  const getOverallAccuracy = (): number => {
+    let totalQuestions = 0;
+    let totalCorrect = 0;
+    
+    completeActivityProgress.forEach(activity => {
+      if (activity.activity_type === 'smart_quiz') {
+        // For smart quiz: each attempt is a quiz session with 5 questions
+        const questionsPerQuiz = 5;
+        totalQuestions += activity.total_attempts * questionsPerQuiz;
+        totalCorrect += activity.correct_answers;
+      } else if (!isTimeOnlyActivity(activity.activity_type)) {
+        // For other activities: each attempt is 1 question
+        totalQuestions += activity.total_attempts;
+        totalCorrect += activity.correct_answers;
+      }
+      // Time-only activities don't contribute to accuracy
+    });
+    
+    return totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
   };
 
   // Create a complete list with all activities, filling missing ones with zeros
@@ -109,55 +150,60 @@ const ProgressDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Session Time Card */}
-      <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-purple-800">
-            <Clock className="h-5 w-5" />
-            Today's Session Time
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-3xl font-bold text-purple-800">
-              {formatTime(totalTimeToday)}
-            </div>
-            <Badge 
-              variant={isActive ? "default" : "secondary"}
-              className={isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}
-            >
-              {isActive ? (
-                <>
-                  <Play className="h-3 w-3 mr-1" />
-                  Active
-                </>
-              ) : (
-                <>
-                  <Pause className="h-3 w-3 mr-1" />
-                  Paused
-                </>
-              )}
-            </Badge>
-          </div>
-          
-          {currentSession && (
-            <div className="text-sm text-gray-600">
-              Current session: {formatTime(currentSession.total_time_spent)}
-            </div>
-          )}
-          
-          <div className="mt-4 p-3 bg-white rounded-lg border">
-            <div className="text-sm text-gray-600 mb-2">Session Status</div>
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${isActive ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-              <span className="text-sm">
-                {isActive ? 'Timer is running' : 'Timer is paused'}
-              </span>
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              Timer automatically pauses when you're inactive for 30+ seconds
-            </div>
-          </div>
+      {/* Live Time Tracker */}
+      <LiveTimeTracker />
+
+      {/* Reset Progress Section */}
+      <Card className="bg-red-50 border-red-200">
+        <CardContent className="pt-6">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                className="w-full"
+                disabled={loading}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Reset All Progress
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset All Progress</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to reset all your progress? This action will permanently delete:
+                </AlertDialogDescription>
+                <div className="mt-2">
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>All activity progress and statistics</li>
+                    <li>All earned badges and achievements</li>
+                    <li>All session history and time tracking</li>
+                    <li>All adaptive difficulty progress</li>
+                    <li>All question history</li>
+                  </ul>
+                  <p className="mt-2">
+                    <strong className="text-red-600">This action cannot be undone!</strong>
+                  </p>
+                </div>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    const success = await resetAllProgress();
+                    if (success) {
+                      // Refresh the dashboard
+                      window.location.reload();
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Yes, Reset Everything
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
 
@@ -189,11 +235,11 @@ const ProgressDashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {getAccuracyPercentage(getTotalAttempts(), getTotalCorrect())}%
+              {getOverallAccuracy()}%
             </div>
             <Progress 
-              value={getAccuracyPercentage(getTotalAttempts(), getTotalCorrect())} 
-              className="mt-2" 
+              value={getOverallAccuracy()} 
+              className="mt-2"
             />
           </CardContent>
         </Card>
@@ -277,7 +323,7 @@ const ProgressDashboard: React.FC = () => {
                         
                         <div className="text-center">
                           <div className="text-2xl font-bold text-purple-600">
-                            {getAccuracyPercentage(activity.total_attempts, activity.correct_answers)}%
+                            {getAccuracyPercentage(activity.total_attempts, activity.correct_answers, activity.activity_type)}%
                           </div>
                           <div className="text-sm text-gray-600">Accuracy</div>
                         </div>
@@ -303,7 +349,7 @@ const ProgressDashboard: React.FC = () => {
                         </div>
                         
                         <Progress 
-                          value={getAccuracyPercentage(activity.total_attempts, activity.correct_answers)} 
+                          value={getAccuracyPercentage(activity.total_attempts, activity.correct_answers, activity.activity_type)} 
                           className="w-32" 
                         />
                       </div>

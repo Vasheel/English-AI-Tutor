@@ -9,6 +9,7 @@ import { useSessionTimer } from "@/hooks/useSessionTimer";
 
 interface Exercise {
   type: string;
+  difficulty: string;
   prompt: string;
   input: string;
   answer: string;
@@ -23,7 +24,6 @@ interface ExerciseStats {
 }
 
 const ExerciseGenerator = () => {
-  const [currentExercise, setCurrentExercise] = useState<Exercise | null>(null);
   const [userAnswer, setUserAnswer] = useState("");
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
@@ -41,11 +41,12 @@ const ExerciseGenerator = () => {
   const { updateProgress, addSession } = useSupabaseProgress();
   const { seconds: sessionTime, getFormattedTime } = useSessionTimer();
 
-  // Predefined exercises with correct answers
+  // Predefined exercises with correct answers - organized by difficulty and type
   const predefinedExercises = [
-    // Remove extra word exercises
+    // BEGINNER LEVEL - Remove extra word exercises
     {
       type: "remove_extra_word",
+      difficulty: "beginner",
       prompt: "Remove the extra word from the sentence.",
       input: "Last week my mother cleaned the an bathroom.",
       answer: "Last week my mother cleaned the bathroom.",
@@ -53,6 +54,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "remove_extra_word",
+      difficulty: "beginner",
       prompt: "Remove the extra word from the sentence.",
       input: "The cat the sits on the mat.",
       answer: "The cat sits on the mat.",
@@ -60,140 +62,23 @@ const ExerciseGenerator = () => {
     },
     {
       type: "remove_extra_word",
+      difficulty: "beginner",
       prompt: "Remove the extra word from the sentence.",
       input: "She plays with her very dog.",
       answer: "She plays with her dog.",
       explanation: "The word 'very' was incorrectly added to the sentence."
     },
-
-    // Add punctuation exercises
-    {
-      type: "add_punctuation",
-      prompt: "Add the required capital letter and full stop.",
-      input: "mary is happy it's her birthday",
-      answer: "Mary is happy it's her birthday.",
-      explanation: "The first word should be capitalized and the sentence should end with a period."
-    },
-    {
-      type: "add_punctuation",
-      prompt: "Add the required capital letter and full stop.",
-      input: "the children played on the playground",
-      answer: "The children played on the playground.",
-      explanation: "The first word should be capitalized and the sentence should end with a period."
-    },
-
-    // Adverb placement exercises
-    {
-      type: "adverb_placement",
-      prompt: "Add the adverb 'happily' in the right place.",
-      input: "We go to school every day.",
-      answer: "We happily go to school every day.",
-      explanation: "The adverb 'happily' should be placed before the verb to describe how the action is performed."
-    },
-    {
-      type: "adverb_placement",
-      prompt: "Add the adverb 'quickly' in the right place.",
-      input: "The children ran to the park.",
-      answer: "The children quickly ran to the park.",
-      explanation: "The adverb 'quickly' should be placed before the verb to describe how the action is performed."
-    },
-    {
-      type: "adverb_placement",
-      prompt: "Add the adverb 'carefully' in the right place.",
-      input: "She reads the book.",
-      answer: "She carefully reads the book.",
-      explanation: "The adverb 'carefully' should be placed before the verb to describe how the action is performed."
-    },
-
-    // Word order exercises
-    {
-      type: "word_order",
-      prompt: "Put the words in the correct order to form a proper sentence.",
-      input: "painting – Maya – her – is – room",
-      answer: "Maya is painting her room.",
-      explanation: "The words need to be arranged in the correct grammatical order to form a meaningful sentence."
-    },
-    {
-      type: "word_order",
-      prompt: "Put the words in the correct order to form a proper sentence.",
-      input: "cat – the – sits – mat – on – the",
-      answer: "The cat sits on the mat.",
-      explanation: "The words need to be arranged in the correct grammatical order to form a meaningful sentence."
-    },
-
-    // Negative form exercises
-    {
-      type: "negative_form",
-      prompt: "Transform the sentence into its negative form.",
-      input: "The teacher reads a book.",
-      answer: "The teacher does not read a book.",
-      explanation: "To make a sentence negative, we add 'does not' for third person singular present tense and change the verb to base form."
-    },
-    {
-      type: "negative_form",
-      prompt: "Transform the sentence into its negative form.",
-      input: "The fisherman sat on the beach.",
-      answer: "The fisherman did not sit on the beach.",
-      explanation: "To make a sentence negative in past tense, we add 'did not' and change the verb to base form."
-    },
-    {
-      type: "negative_form",
-      prompt: "Transform the sentence into its negative form.",
-      input: "She plays with her dog.",
-      answer: "She does not play with her dog.",
-      explanation: "To make a sentence negative, we add 'does not' for third person singular present tense and change the verb to base form."
-    },
-
-    // Interrogative form exercises
-    {
-      type: "interrogative_form",
-      prompt: "Transform the sentence into its interrogative form.",
-      input: "The girl will recite a poem.",
-      answer: "Will the girl recite a poem?",
-      explanation: "To make a question, we move the auxiliary verb 'will' to the beginning."
-    },
-    {
-      type: "interrogative_form",
-      prompt: "Transform the sentence into its interrogative form.",
-      input: "She plays with her dog.",
-      answer: "Does she play with her dog?",
-      explanation: "To make a question, we add 'does' for third person singular present tense and change the verb to base form."
-    },
-    {
-      type: "interrogative_form",
-      prompt: "Transform the sentence into its interrogative form.",
-      input: "The teacher reads a book.",
-      answer: "Does the teacher read a book?",
-      explanation: "To make a question, we add 'does' for third person singular present tense and change the verb to base form."
-    },
-
-    // Use given words exercises
-    {
-      type: "use_given_words",
-      prompt: "Write one sentence using the following words: cyclone – radio",
-      input: "cyclone – radio",
-      answer: "Sample: The cyclone damaged the radio.",
-      explanation: "Write a meaningful sentence that includes both words: 'cyclone' and 'radio'."
-    },
-    {
-      type: "use_given_words",
-      prompt: "Write one sentence using the following words: teacher – student",
-      input: "teacher – student",
-      answer: "Sample: The teacher helps the student.",
-      explanation: "Write a meaningful sentence that includes both words: 'teacher' and 'student'."
-    }
-    ,
-    // --- Additional exercises to increase variety ---
-    // Remove extra word (more)
     {
       type: "remove_extra_word",
+      difficulty: "beginner",
       prompt: "Remove the extra word from the sentence.",
-      input: "He quickly quickly finished his homework.",
-      answer: "He quickly finished his homework.",
-      explanation: "The word 'quickly' was duplicated."
+      input: "I am am very excited.",
+      answer: "I am very excited.",
+      explanation: "The word 'am' was repeated."
     },
     {
       type: "remove_extra_word",
+      difficulty: "beginner",
       prompt: "Remove the extra word from the sentence.",
       input: "They went to to the market yesterday.",
       answer: "They went to the market yesterday.",
@@ -201,15 +86,65 @@ const ExerciseGenerator = () => {
     },
     {
       type: "remove_extra_word",
+      difficulty: "beginner",
       prompt: "Remove the extra word from the sentence.",
-      input: "I am am very excited.",
-      answer: "I am very excited.",
-      explanation: "The word 'am' was repeated."
+      input: "He quickly quickly finished his homework.",
+      answer: "He quickly finished his homework.",
+      explanation: "The word 'quickly' was duplicated."
+    },
+    {
+      type: "remove_extra_word",
+      difficulty: "beginner",
+      prompt: "Remove the extra word from the sentence.",
+      input: "The dog is is sleeping on the couch.",
+      answer: "The dog is sleeping on the couch.",
+      explanation: "The word 'is' was repeated."
+    },
+    {
+      type: "remove_extra_word",
+      difficulty: "beginner",
+      prompt: "Remove the extra word from the sentence.",
+      input: "We have have a big garden.",
+      answer: "We have a big garden.",
+      explanation: "The word 'have' was repeated."
+    },
+    {
+      type: "remove_extra_word",
+      difficulty: "beginner",
+      prompt: "Remove the extra word from the sentence.",
+      input: "She can can swim very well.",
+      answer: "She can swim very well.",
+      explanation: "The word 'can' was repeated."
+    },
+    {
+      type: "remove_extra_word",
+      difficulty: "beginner",
+      prompt: "Remove the extra word from the sentence.",
+      input: "The book is is on the table.",
+      answer: "The book is on the table.",
+      explanation: "The word 'is' was repeated."
     },
 
-    // Add punctuation (more)
+    // BEGINNER LEVEL - Add punctuation exercises
     {
       type: "add_punctuation",
+      difficulty: "beginner",
+      prompt: "Add the required capital letter and full stop.",
+      input: "mary is happy it's her birthday",
+      answer: "Mary is happy it's her birthday.",
+      explanation: "The first word should be capitalized and the sentence should end with a period."
+    },
+    {
+      type: "add_punctuation",
+      difficulty: "beginner",
+      prompt: "Add the required capital letter and full stop.",
+      input: "the children played on the playground",
+      answer: "The children played on the playground.",
+      explanation: "The first word should be capitalized and the sentence should end with a period."
+    },
+    {
+      type: "add_punctuation",
+      difficulty: "beginner",
       prompt: "Add the required capital letter and full stop.",
       input: "we will visit the museum tomorrow",
       answer: "We will visit the museum tomorrow.",
@@ -217,6 +152,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "add_punctuation",
+      difficulty: "beginner",
       prompt: "Add the required capital letter and question mark.",
       input: "what time does the show start",
       answer: "What time does the show start?",
@@ -224,15 +160,65 @@ const ExerciseGenerator = () => {
     },
     {
       type: "add_punctuation",
+      difficulty: "beginner",
       prompt: "Fix capitalization and end punctuation.",
       input: "on monday we have a science test",
       answer: "On Monday we have a science test.",
       explanation: "Capitalize proper nouns and end with a period."
     },
+    {
+      type: "add_punctuation",
+      difficulty: "beginner",
+      prompt: "Add proper capitalization and punctuation.",
+      input: "my name is sarah and i am ten years old",
+      answer: "My name is Sarah and I am ten years old.",
+      explanation: "Capitalize names, first person pronoun, and end with a period."
+    },
+    {
+      type: "add_punctuation",
+      difficulty: "beginner",
+      prompt: "Add the required capital letter and exclamation mark.",
+      input: "wow that was amazing",
+      answer: "Wow that was amazing!",
+      explanation: "Capitalize the first word and use an exclamation mark for excitement."
+    },
+    {
+      type: "add_punctuation",
+      difficulty: "beginner",
+      prompt: "Fix capitalization and punctuation.",
+      input: "the dog ran quickly through the park",
+      answer: "The dog ran quickly through the park.",
+      explanation: "Capitalize the first word and end with a period."
+    },
 
-    // Adverb placement (more)
+    // INTERMEDIATE LEVEL - Adverb placement exercises
     {
       type: "adverb_placement",
+      difficulty: "intermediate",
+      prompt: "Add the adverb 'happily' in the right place.",
+      input: "We go to school every day.",
+      answer: "We happily go to school every day.",
+      explanation: "The adverb 'happily' should be placed before the verb to describe how the action is performed."
+    },
+    {
+      type: "adverb_placement",
+      difficulty: "intermediate",
+      prompt: "Add the adverb 'quickly' in the right place.",
+      input: "The children ran to the park.",
+      answer: "The children quickly ran to the park.",
+      explanation: "The adverb 'quickly' should be placed before the verb to describe how the action is performed."
+    },
+    {
+      type: "adverb_placement",
+      difficulty: "intermediate",
+      prompt: "Add the adverb 'carefully' in the right place.",
+      input: "She reads the book.",
+      answer: "She carefully reads the book.",
+      explanation: "The adverb 'carefully' should be placed before the verb to describe how the action is performed."
+    },
+    {
+      type: "adverb_placement",
+      difficulty: "intermediate",
       prompt: "Add the adverb 'quietly' in the right place.",
       input: "The baby sleeps.",
       answer: "The baby quietly sleeps.",
@@ -240,6 +226,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "adverb_placement",
+      difficulty: "intermediate",
       prompt: "Add the adverb 'gently' in the right place.",
       input: "She closed the door.",
       answer: "She gently closed the door.",
@@ -247,15 +234,49 @@ const ExerciseGenerator = () => {
     },
     {
       type: "adverb_placement",
+      difficulty: "intermediate",
       prompt: "Add the adverb 'patiently' in the right place.",
       input: "They waited for the bus.",
       answer: "They patiently waited for the bus.",
       explanation: "Place the adverb before the verb phrase."
     },
+    {
+      type: "adverb_placement",
+      difficulty: "intermediate",
+      prompt: "Add the adverb 'suddenly' in the right place.",
+      input: "The rain started falling.",
+      answer: "The rain suddenly started falling.",
+      explanation: "Place the adverb before the verb to show when the action happened."
+    },
+    {
+      type: "adverb_placement",
+      difficulty: "intermediate",
+      prompt: "Add the adverb 'slowly' in the right place.",
+      input: "The turtle walked across the road.",
+      answer: "The turtle slowly walked across the road.",
+      explanation: "Place the adverb before the verb to describe how the action is performed."
+    },
 
-    // Word order (more)
+    // INTERMEDIATE LEVEL - Word order exercises
     {
       type: "word_order",
+      difficulty: "intermediate",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "painting – Maya – her – is – room",
+      answer: "Maya is painting her room.",
+      explanation: "The words need to be arranged in the correct grammatical order to form a meaningful sentence."
+    },
+    {
+      type: "word_order",
+      difficulty: "intermediate",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "cat – the – sits – mat – on – the",
+      answer: "The cat sits on the mat.",
+      explanation: "The words need to be arranged in the correct grammatical order to form a meaningful sentence."
+    },
+    {
+      type: "word_order",
+      difficulty: "intermediate",
       prompt: "Put the words in the correct order to form a proper sentence.",
       input: "homework – his – did – he – yesterday",
       answer: "He did his homework yesterday.",
@@ -263,6 +284,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "word_order",
+      difficulty: "intermediate",
       prompt: "Put the words in the correct order to form a proper sentence.",
       input: "football – after – plays – school – she",
       answer: "She plays football after school.",
@@ -270,15 +292,65 @@ const ExerciseGenerator = () => {
     },
     {
       type: "word_order",
+      difficulty: "intermediate",
       prompt: "Put the words in the correct order to form a proper sentence.",
       input: "breakfast – usually – I – have – at – seven",
       answer: "I usually have breakfast at seven.",
       explanation: "Frequency adverb goes before the main verb."
     },
+    {
+      type: "word_order",
+      difficulty: "intermediate",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "book – reading – is – she – a – interesting",
+      answer: "She is reading an interesting book.",
+      explanation: "Subject + auxiliary verb + main verb + article + adjective + object."
+    },
+    {
+      type: "word_order",
+      difficulty: "intermediate",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "park – children – playing – the – are – in",
+      answer: "The children are playing in the park.",
+      explanation: "Subject + auxiliary verb + main verb + prepositional phrase."
+    },
+    {
+      type: "word_order",
+      difficulty: "intermediate",
+      prompt: "Put the words in the correct order to form a proper sentence.",
+      input: "cake – birthday – delicious – the – was – very",
+      answer: "The birthday cake was very delicious.",
+      explanation: "Article + adjective + noun + verb + adverb + adjective."
+    },
 
-    // Negative form (more)
+    // ADVANCED LEVEL - Negative form exercises
     {
       type: "negative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its negative form.",
+      input: "The teacher reads a book.",
+      answer: "The teacher does not read a book.",
+      explanation: "To make a sentence negative, we add 'does not' for third person singular present tense and change the verb to base form."
+    },
+    {
+      type: "negative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its negative form.",
+      input: "The fisherman sat on the beach.",
+      answer: "The fisherman did not sit on the beach.",
+      explanation: "To make a sentence negative in past tense, we add 'did not' and change the verb to base form."
+    },
+    {
+      type: "negative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its negative form.",
+      input: "She plays with her dog.",
+      answer: "She does not play with her dog.",
+      explanation: "To make a sentence negative, we add 'does not' for third person singular present tense and change the verb to base form."
+    },
+    {
+      type: "negative_form",
+      difficulty: "advanced",
       prompt: "Transform the sentence into its negative form.",
       input: "He likes spicy food.",
       answer: "He does not like spicy food.",
@@ -286,6 +358,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "negative_form",
+      difficulty: "advanced",
       prompt: "Transform the sentence into its negative form.",
       input: "They went to the concert.",
       answer: "They did not go to the concert.",
@@ -293,15 +366,57 @@ const ExerciseGenerator = () => {
     },
     {
       type: "negative_form",
+      difficulty: "advanced",
       prompt: "Transform the sentence into its negative form.",
       input: "We will travel tomorrow.",
       answer: "We will not travel tomorrow.",
       explanation: "Add 'not' after 'will' for future negative."
     },
+    {
+      type: "negative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its negative form.",
+      input: "I am happy today.",
+      answer: "I am not happy today.",
+      explanation: "Add 'not' after 'am' for present tense negative."
+    },
+    {
+      type: "negative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its negative form.",
+      input: "They are playing outside.",
+      answer: "They are not playing outside.",
+      explanation: "Add 'not' after 'are' for present continuous negative."
+    },
 
-    // Interrogative form (more)
+    // ADVANCED LEVEL - Interrogative form exercises
     {
       type: "interrogative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "The girl will recite a poem.",
+      answer: "Will the girl recite a poem?",
+      explanation: "To make a question, we move the auxiliary verb 'will' to the beginning."
+    },
+    {
+      type: "interrogative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "She plays with her dog.",
+      answer: "Does she play with her dog?",
+      explanation: "To make a question, we add 'does' for third person singular present tense and change the verb to base form."
+    },
+    {
+      type: "interrogative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "The teacher reads a book.",
+      answer: "Does the teacher read a book?",
+      explanation: "To make a question, we add 'does' for third person singular present tense and change the verb to base form."
+    },
+    {
+      type: "interrogative_form",
+      difficulty: "advanced",
       prompt: "Transform the sentence into its interrogative form.",
       input: "They are ready for the trip.",
       answer: "Are they ready for the trip?",
@@ -309,6 +424,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "interrogative_form",
+      difficulty: "advanced",
       prompt: "Transform the sentence into its interrogative form.",
       input: "She finished her work.",
       answer: "Did she finish her work?",
@@ -316,15 +432,49 @@ const ExerciseGenerator = () => {
     },
     {
       type: "interrogative_form",
+      difficulty: "advanced",
       prompt: "Transform the sentence into its interrogative form.",
       input: "He can solve the problem.",
       answer: "Can he solve the problem?",
       explanation: "Move the modal verb to the front to form a question."
     },
+    {
+      type: "interrogative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "I am going to the store.",
+      answer: "Am I going to the store?",
+      explanation: "Move the verb 'am' to the beginning to form a question."
+    },
+    {
+      type: "interrogative_form",
+      difficulty: "advanced",
+      prompt: "Transform the sentence into its interrogative form.",
+      input: "They have finished their homework.",
+      answer: "Have they finished their homework?",
+      explanation: "Move the auxiliary verb 'have' to the beginning to form a question."
+    },
 
-    // Use given words (more)
+    // CREATIVE LEVEL - Use given words exercises
     {
       type: "use_given_words",
+      difficulty: "creative",
+      prompt: "Write one sentence using the following words: cyclone – radio",
+      input: "cyclone – radio",
+      answer: "Sample: The cyclone damaged the radio.",
+      explanation: "Write a meaningful sentence that includes both words: 'cyclone' and 'radio'."
+    },
+    {
+      type: "use_given_words",
+      difficulty: "creative",
+      prompt: "Write one sentence using the following words: teacher – student",
+      input: "teacher – student",
+      answer: "Sample: The teacher helps the student.",
+      explanation: "Write a meaningful sentence that includes both words: 'teacher' and 'student'."
+    },
+    {
+      type: "use_given_words",
+      difficulty: "creative",
       prompt: "Write one sentence using the following words: museum – painting",
       input: "museum – painting",
       answer: "Sample: The museum displayed a beautiful painting.",
@@ -332,6 +482,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "use_given_words",
+      difficulty: "creative",
       prompt: "Write one sentence using the following words: garden – butterfly",
       input: "garden – butterfly",
       answer: "Sample: A colorful butterfly flew across the garden.",
@@ -339,6 +490,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "use_given_words",
+      difficulty: "creative",
       prompt: "Write one sentence using the following words: computer – homework",
       input: "computer – homework",
       answer: "Sample: I used the computer to finish my homework.",
@@ -346,6 +498,7 @@ const ExerciseGenerator = () => {
     },
     {
       type: "use_given_words",
+      difficulty: "creative",
       prompt: "Write one sentence using the following words: river – bridge",
       input: "river – bridge",
       answer: "Sample: The old bridge crosses the wide river.",
@@ -353,18 +506,96 @@ const ExerciseGenerator = () => {
     },
     {
       type: "use_given_words",
+      difficulty: "creative",
       prompt: "Write one sentence using the following words: library – silence",
       input: "library – silence",
       answer: "Sample: There was complete silence in the library.",
       explanation: "Write a sentence that includes both words."
+    },
+    {
+      type: "use_given_words",
+      difficulty: "creative",
+      prompt: "Write one sentence using the following words: ocean – sunset",
+      input: "ocean – sunset",
+      answer: "Sample: The sunset over the ocean was breathtaking.",
+      explanation: "Write a sentence that includes both words."
+    },
+    {
+      type: "use_given_words",
+      difficulty: "creative",
+      prompt: "Write one sentence using the following words: mountain – adventure",
+      input: "mountain – adventure",
+      answer: "Sample: Climbing the mountain was a great adventure.",
+      explanation: "Write a sentence that includes both words."
+    },
+    {
+      type: "use_given_words",
+      difficulty: "creative",
+      prompt: "Write one sentence using the following words: friendship – treasure",
+      input: "friendship – treasure",
+      answer: "Sample: True friendship is a precious treasure.",
+      explanation: "Write a sentence that includes both words."
     }
+
   ];
 
-  // Remove the old generator functions and replace with simple random selection
-  const generateRandomExercise = useCallback((): Exercise => {
-    return predefinedExercises[Math.floor(Math.random() * predefinedExercises.length)];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // State for tracking used exercises to avoid repetition
+  const [usedExercises, setUsedExercises] = useState<Set<number>>(new Set());
+  const [exerciseHistory, setExerciseHistory] = useState<Exercise[]>([]);
+  const [shuffledExercises, setShuffledExercises] = useState<Exercise[]>([]);
+  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+
+  // Fisher-Yates shuffle algorithm for better randomization
+  const shuffleArray = useCallback((array: Exercise[]): Exercise[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   }, []);
+
+  // Initialize shuffled exercises on component mount
+  useEffect(() => {
+    const shuffled = shuffleArray(predefinedExercises);
+    setShuffledExercises(shuffled);
+    setCurrentExerciseIndex(0);
+    setUsedExercises(new Set());
+    setExerciseHistory([]);
+  }, []); // Empty dependency array - only run on mount
+
+  // Get current exercise from shuffled array
+  const getCurrentExercise = useCallback((): Exercise | null => {
+    if (shuffledExercises.length === 0) return null;
+    return shuffledExercises[currentExerciseIndex];
+  }, [shuffledExercises, currentExerciseIndex]);
+
+  // Move to next exercise
+  const moveToNextExercise = useCallback(() => {
+    setCurrentExerciseIndex(prev => {
+      const nextIndex = prev + 1;
+      // If we've reached the end, reshuffle and start over
+      if (nextIndex >= shuffledExercises.length) {
+        const newShuffled = shuffleArray(predefinedExercises);
+        setShuffledExercises(newShuffled);
+        toast({
+          title: "🎉 All exercises completed!",
+          description: "Reshuffling exercises for another round.",
+        });
+        return 0;
+      }
+      return nextIndex;
+    });
+  }, [shuffledExercises.length, shuffleArray]);
+
+  // Force reshuffle function
+  const reshuffleExercises = useCallback(() => {
+    const newShuffled = shuffleArray(predefinedExercises);
+    setShuffledExercises(newShuffled);
+    setCurrentExerciseIndex(0);
+    setUsedExercises(new Set());
+    setExerciseHistory([]);
+  }, [shuffleArray]);
 
   // Function to validate sentence using ChatGPT
   const validateSentenceWithAI = async (userSentence: string, requiredWords: string[]): Promise<{ isValid: boolean; feedback: string }> => {
@@ -454,6 +685,7 @@ const ExerciseGenerator = () => {
   };
 
   const checkAnswer = useCallback(async () => {
+    const currentExercise = getCurrentExercise();
     if (!currentExercise) return;
 
     const cleanUserAnswer = userAnswer.trim();
@@ -605,17 +837,16 @@ const ExerciseGenerator = () => {
     } catch (error) {
       console.error("Error updating grammar exercise progress:", error);
     }
-  }, [currentExercise, userAnswer, stats, playSound, updateProgress, addSession, sessionTime, feedback]);
+  }, [userAnswer, stats, playSound, updateProgress, addSession, sessionTime, feedback, shuffledExercises, currentExerciseIndex]);
 
   const nextExercise = useCallback(() => {
-    const newExercise = generateRandomExercise();
-    setCurrentExercise(newExercise);
+    moveToNextExercise();
     setUserAnswer("");
     setShowResult(false);
     setIsCorrect(false);
     setFeedback("");
     playSound("click");
-  }, [playSound, generateRandomExercise]);
+  }, [moveToNextExercise, playSound]);
 
   const retryExercise = () => {
     setUserAnswer("");
@@ -646,19 +877,22 @@ const ExerciseGenerator = () => {
   });
 
   useEffect(() => {
-    nextExercise();
-  }, [nextExercise]);
+    // Component is ready, no need to call nextExercise here
+    // The current exercise is already set from the shuffled array
+  }, []);
+
+  const currentExercise = getCurrentExercise();
 
   if (!currentExercise) {
     return <div>Loading exercise...</div>;
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 max-w-2xl mx-auto">
-      <div className="text-center mb-6">
-        <h3 className="text-xl font-bold text-green-600 mb-2">📝 Grammar Exercise</h3>
-        <p className="text-sm text-gray-600 mb-2">Practice your grammar skills with dynamic exercises!</p>
-        <div className="flex justify-between text-sm text-gray-600">
+    <div className="bg-white rounded-xl shadow-md p-8 max-w-4xl mx-auto">
+      <div className="text-center mb-8">
+        <h3 className="text-2xl font-bold text-green-600 mb-3">📝 Grammar Exercise</h3>
+        <p className="text-base text-gray-600 mb-4">Practice your grammar skills with dynamic exercises!</p>
+        <div className="flex justify-between text-base text-gray-600">
           <span>Score: {stats.score}/{stats.totalAttempts}</span>
           <span>Accuracy: {stats.accuracy}%</span>
           <span>Session: {getFormattedTime()}</span>
@@ -666,21 +900,31 @@ const ExerciseGenerator = () => {
       </div>
 
       {/* Exercise Display */}
-      <div className="mb-6">
-        <div className="bg-green-50 p-4 rounded-lg mb-4">
-          <h4 className="font-semibold text-green-800 mb-2">Question:</h4>
-          <p className="text-lg text-green-700">{currentExercise.prompt}</p>
+      <div className="mb-8">
+        <div className="bg-green-50 p-6 rounded-lg mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold text-green-800 text-lg">Question:</h4>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              currentExercise.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
+              currentExercise.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
+              currentExercise.difficulty === 'advanced' ? 'bg-red-100 text-red-800' :
+              'bg-purple-100 text-purple-800'
+            }`}>
+              {currentExercise.difficulty.charAt(0).toUpperCase() + currentExercise.difficulty.slice(1)}
+            </span>
+          </div>
+          <p className="text-xl text-green-700">{currentExercise.prompt}</p>
         </div>
         
-        <div className="bg-gray-50 p-4 rounded-lg mb-4">
-          <h4 className="font-semibold text-gray-800 mb-2">Input:</h4>
-          <p className="text-lg text-gray-700 font-mono">{currentExercise.input}</p>
+        <div className="bg-gray-50 p-6 rounded-lg mb-6">
+          <h4 className="font-semibold text-gray-800 mb-3 text-lg">Input:</h4>
+          <p className="text-xl text-gray-700 font-mono">{currentExercise.input}</p>
         </div>
       </div>
 
       {/* Answer Input */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-4">
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-6">
           <input
             type="text"
             value={userAnswer}
@@ -691,7 +935,7 @@ const ExerciseGenerator = () => {
               }
             }}
             placeholder="Type your answer here..."
-            className="flex-1 p-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-400 focus:border-transparent"
+            className="flex-1 p-4 border border-gray-300 rounded-lg text-xl focus:ring-2 focus:ring-green-400 focus:border-transparent"
             disabled={showResult}
           />
 
@@ -699,7 +943,7 @@ const ExerciseGenerator = () => {
             <button
               onClick={startListening}
               disabled={showResult}
-              className={`p-3 rounded-lg text-white ${
+              className={`p-4 rounded-lg text-white ${
                 isListening
                   ? "bg-red-600 animate-pulse"
                   : "bg-blue-500 hover:bg-blue-600"
@@ -712,7 +956,7 @@ const ExerciseGenerator = () => {
         </div>
 
         {isListening && (
-          <div className="text-center text-sm text-blue-600">
+          <div className="text-center text-base text-blue-600 mb-4">
             🎤 Listening... Speak your answer clearly
           </div>
         )}
@@ -720,69 +964,69 @@ const ExerciseGenerator = () => {
 
       {/* Result Display */}
       {showResult && (
-        <div className={`text-center p-4 rounded-lg mb-4 ${
+        <div className={`text-center p-6 rounded-lg mb-6 ${
           isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
         }`}>
-          <div className="flex items-center justify-center gap-2 mb-2">
+          <div className="flex items-center justify-center gap-2 mb-3">
             {isValidating ? (
               <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span>Validating...</span>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <span className="text-lg">Validating...</span>
               </div>
             ) : isCorrect ? (
-              <CheckCircle className="h-5 w-5" />
+              <CheckCircle className="h-6 w-6" />
             ) : (
-              <span>❌</span>
+              <span className="text-2xl">❌</span>
             )}
-            <span className="font-semibold">
+            <span className="font-semibold text-lg">
               {isValidating ? "Validating..." : isCorrect ? "Correct!" : "Not quite right"}
             </span>
           </div>
           {!isValidating && (
-            <p className="text-sm mt-2">
+            <p className="text-base mt-3">
               {feedback || currentExercise.explanation || "Please try again."}
             </p>
           )}
           {!isCorrect && !isValidating && (
-            <div className="mt-3 flex gap-2 justify-center">
+            <div className="mt-4 flex gap-3 justify-center">
               <button
                 onClick={retryExercise}
-                className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                className="bg-blue-500 text-white px-4 py-2 rounded text-base hover:bg-blue-600"
               >
                 Try Again
               </button>
               <button
                 onClick={showAnswer}
-                className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600"
+                className="bg-gray-500 text-white px-4 py-2 rounded text-base hover:bg-gray-600"
               >
                 Show Answer
               </button>
             </div>
           )}
           {showCorrectAnswer && (
-            <div className="mt-3 p-2 bg-yellow-100 rounded">
-              <p className="text-sm font-semibold">Correct Answer:</p>
-              <p className="text-sm">{currentExercise.answer}</p>
+            <div className="mt-4 p-3 bg-yellow-100 rounded">
+              <p className="text-base font-semibold">Correct Answer:</p>
+              <p className="text-base">{currentExercise.answer}</p>
             </div>
           )}
         </div>
       )}
 
       {/* Controls */}
-      <div className="flex gap-2">
+      <div className="flex gap-3">
         <button
           onClick={checkAnswer}
           disabled={!userAnswer.trim() || showResult || isValidating}
-          className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 bg-green-500 text-white py-3 px-6 rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-lg"
         >
           {isValidating ? (
             <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
               Validating...
             </>
           ) : (
             <>
-              <CheckCircle className="h-4 w-4" />
+              <CheckCircle className="h-5 w-5" />
               Check Answer
             </>
           )}
@@ -790,10 +1034,27 @@ const ExerciseGenerator = () => {
         
         <button
           onClick={nextExercise}
-          className="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2"
+          className="bg-blue-500 text-white py-3 px-6 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2 text-lg"
         >
-          <Shuffle className="h-4 w-4" />
+          <Shuffle className="h-5 w-5" />
           Next Exercise
+        </button>
+
+        <button
+          onClick={() => {
+            // Force shuffle by resetting and reshuffling all exercises
+            reshuffleExercises();
+            setUserAnswer("");
+            setShowResult(false);
+            setIsCorrect(false);
+            setFeedback("");
+            playSound("click");
+          }}
+          className="bg-purple-500 text-white py-3 px-4 rounded-lg hover:bg-purple-600 flex items-center justify-center gap-1 text-lg"
+          title="Shuffle all exercises"
+        >
+          <Shuffle className="h-5 w-5" />
+          <span>Shuffle</span>
         </button>
       </div>
     </div>

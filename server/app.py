@@ -41,7 +41,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routes import debug, health, models, quizzes, images, grammar, chat
+# Fix relative imports for direct execution
+try:
+    from .routes import debug, health, models, quizzes, images, grammar, chat
+except ImportError:
+    # When running directly, use absolute imports
+    from routes import debug, health, models, quizzes, images, grammar, chat
 app.include_router(debug.router)
 app.include_router(health.router)
 app.include_router(models.router)
